@@ -1,0 +1,35 @@
+# ── Python environments ─────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# ── Kaggle competition data (download separately; do not commit) ─────
+**/data/raw/*.csv
+**/data/raw/*.zip
+**/data/processed/*
+**/data/submissions/*.csv
+
+# ── Model artifacts & generated outputs ─────────────────────────────
+**/models/*.joblib
+**/models/*.pkl
+**/submissions/*.csv
+**/outputs/*.png
+**/outputs/*.txt
+**/reports/figures/*.png
+
+# CatBoost runtime logs
+**/catboost_info/
+
+# Keep empty-folder placeholders
+!**/.gitkeep
+
+# ── Local tooling / editor ──────────────────────────────────────────
+.claude/
+.DS_Store
+.vscode/
+.idea/
