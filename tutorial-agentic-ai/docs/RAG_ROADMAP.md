@@ -57,6 +57,9 @@ Create a Chroma retriever using similarity search.
 - Test retrieval independently from answer generation.
 - Print retrieved text, source PDF, page number, and similarity information
   when available.
+- Include one page-specific smoke-test query per tutorial paper.
+- Status: initial five-paper similarity retrieval test implemented in
+  `notebooks/rag_basics.ipynb`.
 
 ## 6. Define the RAG prompt
 
