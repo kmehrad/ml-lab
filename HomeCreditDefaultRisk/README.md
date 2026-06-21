@@ -96,6 +96,15 @@ The command writes metrics and out-of-fold predictions to
 with seed 42. ROC AUC is the primary selection metric; log loss and Brier score
 are included to monitor probability quality.
 
+Generate the validated fold-averaged blend submission with:
+
+```bash
+python -m src.submit
+```
+
+This writes `outputs/exp-004_submission.csv` using 35% LightGBM and 65%
+CatBoost probabilities.
+
 ## Experiment Results
 
 Results below are from three-fold stratified cross-validation on all 307,511
@@ -109,6 +118,12 @@ training applications.
 | exp-004 | 35% LightGBM / 65% CatBoost | OOF probability blend | **0.792277** | 0.000965 | **0.792249** | **0.235363** | **0.065526** | negligible |
 
 These are local validation results, not Kaggle leaderboard scores.
+
+The `exp-004` submission was uploaded on June 21, 2026:
+
+| Submission | Public ROC AUC | Private ROC AUC | Kaggle status |
+|---|---:|---:|---|
+| `exp-004_submission.csv` | 0.79584 | 0.79191 | Complete |
 
 ## Experimental Observations
 
