@@ -6,7 +6,7 @@ test set, and write a Kaggle submission to ``data/submissions``.
 
 Usage::
 
-    python -m src.train                 # default model (hgb)
+    python -m src.train                 # default model (hgb+catboost blend)
     python -m src.train --model lgbm
     python -m src.train --model rf --n-splits 10
 """
@@ -19,11 +19,11 @@ import pandas as pd
 from . import data
 from .evaluate import cross_validate, summarize_scores
 from .features import engineer_train_test, split_X_y
-from .models import available_models, get_model
+from .models import available_models, default_model, get_model
 
 
 def run(
-    model_name: str = "hgb",
+    model_name: str | None = None,
     n_splits: int = 5,
     output: str | None = None,
     model=None,
@@ -33,6 +33,8 @@ def run(
     Pass a pre-built ``model`` (e.g. an Optuna-tuned pipeline) to override the
     default :func:`models.get_model` estimator. Returns the submission DataFrame.
     """
+    model_name = model_name or default_model()
+
     # --- Load & engineer (jointly, so group/family stats span both sets) -----
     raw_train = data.load_train()
     raw_test = data.load_test()
@@ -67,8 +69,8 @@ def main() -> None:
     """Parse CLI arguments and run the training pipeline."""
     parser = argparse.ArgumentParser(description="Train a Spaceship Titanic model and write a submission.")
     parser.add_argument(
-        "--model", default="hgb", choices=available_models(),
-        help="Which classifier to use (default: hgb).",
+        "--model", default=default_model(), choices=available_models(),
+        help=f"Which classifier to use (default: {default_model()}).",
     )
     parser.add_argument("--n-splits", type=int, default=5, help="CV folds (default: 5).")
     parser.add_argument("--output", default=None, help="Submission CSV path (default: data/submissions/submission_<model>.csv).")

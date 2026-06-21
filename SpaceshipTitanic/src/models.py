@@ -7,8 +7,8 @@ by :func:`features.engineer_features` and let the pipeline handle encoding.
 
 Linear models get ``scale_numeric=True``; tree ensembles do not need scaling.
 
-Optional gradient-boosting libraries (XGBoost / LightGBM) are imported lazily so
-the project still works when they are not installed — call
+Optional gradient-boosting libraries (XGBoost / LightGBM / CatBoost) are
+imported lazily so the project still works when they are not installed — call
 :func:`available_models` to see what can be built in the current environment.
 """
 from __future__ import annotations
@@ -41,6 +41,12 @@ try:  # optional dependency
 except ImportError:  # pragma: no cover - depends on environment
     HAS_LIGHTGBM = False
 
+try:  # optional dependency
+    from catboost import CatBoostClassifier
+    HAS_CATBOOST = True
+except ImportError:  # pragma: no cover - depends on environment
+    HAS_CATBOOST = False
+
 
 def _build_classifier(name: str):
     """Return a bare (unpipelined) estimator and whether it wants scaled inputs."""
@@ -67,6 +73,14 @@ def _build_classifier(name: str):
             n_estimators=600, learning_rate=0.05, random_state=RANDOM_STATE,
             n_jobs=-1, verbose=-1,
         ), False
+    if name in ("cat", "catboost"):
+        if not HAS_CATBOOST:
+            raise ValueError("catboost is not installed")
+        return CatBoostClassifier(
+            iterations=700, depth=6, learning_rate=0.05,
+            loss_function="Logloss", random_seed=RANDOM_STATE,
+            verbose=False, thread_count=-1,
+        ), False
     raise ValueError(f"Unknown model name: {name!r}. See available_models().")
 
 
@@ -76,13 +90,20 @@ def get_model(name: str = "hgb", **preprocessor_kwargs) -> Pipeline:
     Parameters
     ----------
     name:
-        One of :func:`available_models` (e.g. ``"logreg"``, ``"rf"``, ``"hgb"``,
-        and ``"xgb"``/``"lgbm"`` when installed).
+        One of :func:`available_models` (e.g. ``"logreg"``, ``"hgb"``,
+        ``"catboost"``, or the ``"blend"`` ensemble when installed).
     **preprocessor_kwargs:
         Forwarded to :func:`features.build_preprocessor` (e.g. to override
         feature lists). ``scale_numeric`` is set automatically per model but can
         be overridden here.
     """
+    if name == "blend":
+        if not HAS_CATBOOST:
+            raise ValueError("The hgb+catboost blend requires catboost")
+        return get_ensemble(
+            kind="voting", members=("hgb", "catboost"), **preprocessor_kwargs
+        )
+
     clf, wants_scaling = _build_classifier(name)
     preprocessor_kwargs.setdefault("scale_numeric", wants_scaling)
     pre = build_preprocessor(**preprocessor_kwargs)
@@ -161,4 +182,11 @@ def available_models() -> list[str]:
         names.append("xgb")
     if HAS_LIGHTGBM:
         names.append("lgbm")
+    if HAS_CATBOOST:
+        names.extend(["catboost", "blend"])
     return names
+
+
+def default_model() -> str:
+    """Return the strongest available default model."""
+    return "blend" if HAS_CATBOOST else "hgb"
