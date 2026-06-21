@@ -11,6 +11,7 @@ workflows, evaluation, and deployable applications.
   retrieval pipelines.
 - **LangGraph** for stateful agents and controllable multi-step workflows.
 - **ChromaDB** for local vector storage and semantic retrieval.
+- **Hugging Face sentence-transformers** for local embeddings by default.
 - **OpenAI, Google Gemini, and Groq** model integrations.
 - **LangSmith** for tracing and evaluation.
 - **Streamlit** for simple interactive applications.
@@ -102,6 +103,9 @@ uv run streamlit run apps/<app_name>/app.py
 7. Tool-using and human-in-the-loop agents
 8. Agent evaluation, tracing, testing, and observability
 9. Streamlit applications and deployment
+
+See [docs/RAG_ROADMAP.md](docs/RAG_ROADMAP.md) for the detailed implementation
+plan for the basic RAG pipeline.
 
 As examples are added, reusable code should go in `src/`, exploratory material
 in `notebooks/`, user-facing demos in `apps/`, and tests in `tests/`.
