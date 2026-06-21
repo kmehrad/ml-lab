@@ -2,6 +2,8 @@
 
 A tabular **binary classification** project for the Kaggle *Spaceship Titanic* competition.
 
+📊 See [RESULTS.md](RESULTS.md) for the full analysis, modeling results, and experiment log.
+
 ## Project goal
 Predict whether a passenger was **transported to an alternate dimension** after the
 Spaceship Titanic collided with a spacetime anomaly. Each passenger is classified as
