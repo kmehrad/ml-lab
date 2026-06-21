@@ -63,9 +63,13 @@ Concatenate with explicit role markers, e.g.:
   TF-IDF→SVD features → LightGBM, shared 5-fold. **OOF log loss 1.01541**
   (folds 1.013–1.018), ≈0.082 above priors — a real but weak floor, as expected.
   Establishes the CV harness, `FeatureBuilder`, and submission format.
-- **Phase 2 — DeBERTa-v3 fine-tune (Tier B)**
+- **Phase 2 — DeBERTa-v3 fine-tune (Tier B)** *(in progress — `src/train_deberta.py`)*
   First genuine model. Target OOF log loss ≈ 0.95–1.00. Establishes the input
-  format, truncation, and inference notebook end-to-end.
+  format, truncation, and inference notebook end-to-end. Runs on the GPU
+  workstation under a pinned stack (`setup_env.sh`: torch 2.5.1 + transformers
+  4.46.3 — `transformers 5.10` has broken DeBERTa-v2 gradients). First fold-0
+  run = **1.06397** (learns but trails Phase 1, undertrained); tuning with role
+  markers + 4 epochs before committing to full 5-fold CV.
 - **Phase 3 — Gemma-2 9B / Llama-3 8B QLoRA (Tier A)** *(the contender)*
   4-bit QLoRA on Kaggle/Colab GPU. Target sub-0.90 OOF. This is where the score is won.
 - **Phase 4 — Robustness & ensemble**
