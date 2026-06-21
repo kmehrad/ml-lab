@@ -68,14 +68,18 @@ Construct a prompt containing the retrieved context and user question.
 - Require answers to use only the supplied context.
 - Instruct the model to say when the context is insufficient.
 - Require citations using source names and page numbers.
+- Status: implemented with a source-labelled context formatter in
+  `notebooks/rag_basics.ipynb`.
 
 ## 7. Generate cited answers
 
 Connect the retriever, prompt, and chat model into a basic RAG chain.
 
+- Use `ChatGroq` with the `qwen/qwen3-32b` model.
 - Return the answer and supporting source documents.
 - Keep retrieval results inspectable for debugging.
 - Avoid hiding the pipeline behind an agent until the baseline is reliable.
+- Status: implemented in `notebooks/rag_basics.ipynb`.
 
 ## 8. Test the complete pipeline
 
