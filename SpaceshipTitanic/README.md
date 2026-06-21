@@ -71,3 +71,11 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+The default model is a soft-voting blend of HistGradientBoosting and CatBoost:
+
+```bash
+python -m src.train
+```
+
+Use `--model hgb` or `--model catboost` to run either component separately.
