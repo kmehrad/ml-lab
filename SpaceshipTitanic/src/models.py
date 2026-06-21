@@ -1,24 +1,91 @@
 """Model definitions for Spaceship Titanic (binary classification).
 
-Each factory will return a fresh scikit-learn classifier. Optional gradient
-boosting libraries (XGBoost / LightGBM) can be added later and imported lazily
-so the project still works without them.
+Each factory returns a complete scikit-learn :class:`~sklearn.pipeline.Pipeline`
+that bundles the feature preprocessor (:func:`features.build_preprocessor`) with
+a classifier, so callers can fit straight on the *engineered* DataFrame returned
+by :func:`features.engineer_features` and let the pipeline handle encoding.
 
-Nothing is implemented yet — these are placeholders.
+Linear models get ``scale_numeric=True``; tree ensembles do not need scaling.
+
+Optional gradient-boosting libraries (XGBoost / LightGBM) are imported lazily so
+the project still works when they are not installed — call
+:func:`available_models` to see what can be built in the current environment.
 """
 from __future__ import annotations
 
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
 
-def get_model(name: str = "logreg"):
-    """Return a fresh classifier estimator by name.
+from .features import build_preprocessor
 
-    Planned baselines: logistic regression, random forest, gradient boosting.
+RANDOM_STATE = 42
+
+try:  # optional dependency
+    from xgboost import XGBClassifier
+    HAS_XGBOOST = True
+except ImportError:  # pragma: no cover - depends on environment
+    HAS_XGBOOST = False
+
+try:  # optional dependency
+    from lightgbm import LGBMClassifier
+    HAS_LIGHTGBM = True
+except ImportError:  # pragma: no cover - depends on environment
+    HAS_LIGHTGBM = False
+
+
+def _build_classifier(name: str):
+    """Return a bare (unpipelined) estimator and whether it wants scaled inputs."""
+    if name == "logreg":
+        return LogisticRegression(max_iter=1000, random_state=RANDOM_STATE), True
+    if name in ("rf", "randomforest"):
+        return RandomForestClassifier(
+            n_estimators=400, n_jobs=-1, random_state=RANDOM_STATE,
+        ), False
+    if name in ("hgb", "gb", "histgb"):
+        return HistGradientBoostingClassifier(random_state=RANDOM_STATE), False
+    if name == "xgb":
+        if not HAS_XGBOOST:
+            raise ValueError("xgboost is not installed")
+        return XGBClassifier(
+            n_estimators=600, learning_rate=0.05, max_depth=5,
+            subsample=0.8, colsample_bytree=0.8, eval_metric="logloss",
+            random_state=RANDOM_STATE, n_jobs=-1,
+        ), False
+    if name in ("lgbm", "lightgbm"):
+        if not HAS_LIGHTGBM:
+            raise ValueError("lightgbm is not installed")
+        return LGBMClassifier(
+            n_estimators=600, learning_rate=0.05, random_state=RANDOM_STATE,
+            n_jobs=-1, verbose=-1,
+        ), False
+    raise ValueError(f"Unknown model name: {name!r}. See available_models().")
+
+
+def get_model(name: str = "hgb", **preprocessor_kwargs) -> Pipeline:
+    """Return a fresh ``preprocessor + classifier`` pipeline by name.
+
+    Parameters
+    ----------
+    name:
+        One of :func:`available_models` (e.g. ``"logreg"``, ``"rf"``, ``"hgb"``,
+        and ``"xgb"``/``"lgbm"`` when installed).
+    **preprocessor_kwargs:
+        Forwarded to :func:`features.build_preprocessor` (e.g. to override
+        feature lists). ``scale_numeric`` is set automatically per model but can
+        be overridden here.
     """
-    # TODO: map ``name`` to a configured sklearn estimator and return it.
-    raise NotImplementedError
+    clf, wants_scaling = _build_classifier(name)
+    preprocessor_kwargs.setdefault("scale_numeric", wants_scaling)
+    pre = build_preprocessor(**preprocessor_kwargs)
+    return Pipeline([("pre", pre), ("clf", clf)])
 
 
-def available_models():
+def available_models() -> list[str]:
     """List the model names that can be built in the current environment."""
-    # TODO: return the set of supported model names.
-    raise NotImplementedError
+    names = ["logreg", "rf", "hgb"]
+    if HAS_XGBOOST:
+        names.append("xgb")
+    if HAS_LIGHTGBM:
+        names.append("lgbm")
+    return names

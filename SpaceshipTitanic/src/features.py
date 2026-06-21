@@ -178,7 +178,9 @@ def build_preprocessor(
         ])
         transformers.append((f"ordinal_{col}", ord_pipe, [col]))
 
-    return ColumnTransformer(transformers, remainder="drop", verbose_feature_names_out=False)
+    pre = ColumnTransformer(transformers, remainder="drop", verbose_feature_names_out=False)
+    # Emit a named DataFrame so downstream estimators keep feature names.
+    return pre.set_output(transform="pandas")
 
 
 def split_X_y(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
