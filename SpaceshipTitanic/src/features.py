@@ -56,7 +56,7 @@ from sklearn.impute import SimpleImputer
 from .data import ID_COL, TARGET
 
 # Raw columns that are pure identifiers — never used as model inputs.
-ID_LIKE_COLS = [ID_COL, "Name", "Cabin", "Group"]
+ID_LIKE_COLS = [ID_COL, "Name", "Cabin", "Group", "Surname"]
 
 SPEND_COLS = ["RoomService", "FoodCourt", "ShoppingMall", "Spa", "VRDeck"]
 
@@ -65,10 +65,19 @@ SPEND_COLS = ["RoomService", "FoodCourt", "ShoppingMall", "Spa", "VRDeck"]
 _UNKNOWN_FILL_COLS = ["HomePlanet", "Destination", "Deck", "Side"]
 
 # --- Feature groups consumed by :func:`build_preprocessor` -------------------
+# Defaults are the best-performing set. The group-spend and family aggregates
+# (``GroupTotalSpend``, ``GroupMeanSpend``, ``FamilySize``) are still computed by
+# :func:`engineer_features` and exposed via EXPERIMENTAL_* below, but they are
+# left OUT of the defaults: in deterministic CV they were a small net negative
+# (hgb 0.8127 with vs 0.8134 without). Opt in by extending these lists.
 NUMERIC_FEATURES = ["Age", "CabinNum", "GroupSize", "IsAlone"]
 SPEND_FEATURES = SPEND_COLS + ["TotalSpend"]          # log1p-transformed
 ONEHOT_FEATURES = ["HomePlanet", "Destination", "Side", "CryoSleep", "VIP"]
 TARGET_FEATURES = ["Deck"]
+
+# Available but excluded by default (did not improve CV — see note above).
+EXPERIMENTAL_NUMERIC = ["FamilySize"]
+EXPERIMENTAL_SPEND = ["GroupTotalSpend", "GroupMeanSpend"]
 
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -94,6 +103,19 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df[SPEND_COLS] = df[SPEND_COLS].fillna(0.0)
     df["TotalSpend"] = df[SPEND_COLS].sum(axis=1)
 
+    # --- Group-level spend aggregates (non-identifying summaries of the group)-
+    # Best computed across train+test together (see ``engineer_train_test``) so
+    # groups split across the two sets get correct counts. Uses no target.
+    grp = df.groupby("Group")["TotalSpend"]
+    df["GroupTotalSpend"] = grp.transform("sum")
+    df["GroupMeanSpend"] = grp.transform("mean")
+
+    # --- Family features from the surname (last token of Name) ----------------
+    surname = df["Name"].str.split().str[-1]
+    df["Surname"] = surname.fillna("Unknown")
+    fam_counts = df.loc[surname.notna(), "Surname"].value_counts()
+    df["FamilySize"] = df["Surname"].map(fam_counts).fillna(0).astype(int)
+
     # --- Boolean flags -------------------------------------------------------
     # A passenger who spent anything cannot have been in CryoSleep.
     cryo = df["CryoSleep"].where(~(df["CryoSleep"].isna() & (df["TotalSpend"] > 0)), False)
@@ -105,6 +127,29 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = df[col].fillna("Unknown")
 
     return df.drop(columns=ID_LIKE_COLS)
+
+
+def engineer_train_test(
+    raw_train: pd.DataFrame, raw_test: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Engineer features on train+test jointly, then split them back.
+
+    Group- and family-level aggregates (sizes, group spend) are computed over the
+    combined passenger set so groups/families that span the train/test boundary
+    get correct counts. This uses only features (never the target), so it is
+    leakage-free. Returns ``(train_engineered, test_engineered)`` where the train
+    frame retains the ``TARGET`` column.
+    """
+    n_train = len(raw_train)
+    combined = pd.concat(
+        [raw_train.drop(columns=[TARGET]), raw_test], ignore_index=True
+    )
+    eng = engineer_features(combined)
+
+    train_eng = eng.iloc[:n_train].copy()
+    train_eng[TARGET] = raw_train[TARGET].to_numpy()
+    test_eng = eng.iloc[n_train:].reset_index(drop=True).copy()
+    return train_eng, test_eng
 
 
 def build_preprocessor(
