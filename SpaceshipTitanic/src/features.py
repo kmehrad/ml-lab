@@ -42,6 +42,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
     FunctionTransformer,
@@ -157,8 +158,13 @@ def build_preprocessor(
     ])
 
     # Target encoding for higher-cardinality nominal features (e.g. Deck).
+    # Pass a seeded CV generator so the internal cross-fitting (and thus the
+    # overall CV score) is reproducible across runs.
     target_pipe = Pipeline([
-        ("encode", TargetEncoder(target_type="binary")),
+        ("encode", TargetEncoder(
+            target_type="binary",
+            cv=KFold(n_splits=5, shuffle=True, random_state=42),
+        )),
     ])
 
     transformers = [
