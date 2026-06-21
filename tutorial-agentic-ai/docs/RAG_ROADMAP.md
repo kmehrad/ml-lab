@@ -41,8 +41,13 @@ Use an embedding model to convert each chunk into a numerical vector.
 Store chunks and embeddings in ChromaDB.
 
 - Persist the index under `data/processed/chroma/`.
+- Keep separate indexes for each embedding provider and model so vector
+  dimensions are never mixed.
 - Reopen an existing collection on later runs.
 - Record the embedding model and chunking configuration used to build it.
+- Fingerprint the chunk contents and require an explicit rebuild when the
+  configuration changes.
+- Status: implemented in `notebooks/rag_basics.ipynb`.
 
 ## 5. Configure and test retrieval
 
