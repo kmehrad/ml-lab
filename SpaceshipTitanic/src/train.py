@@ -22,10 +22,16 @@ from .features import engineer_features, split_X_y
 from .models import available_models, get_model
 
 
-def run(model_name: str = "hgb", n_splits: int = 5, output: str | None = None) -> pd.DataFrame:
+def run(
+    model_name: str = "hgb",
+    n_splits: int = 5,
+    output: str | None = None,
+    model=None,
+) -> pd.DataFrame:
     """Cross-validate, fit on all of train, predict on test, write a submission.
 
-    Returns the submission DataFrame.
+    Pass a pre-built ``model`` (e.g. an Optuna-tuned pipeline) to override the
+    default :func:`models.get_model` estimator. Returns the submission DataFrame.
     """
     # --- Load & engineer -----------------------------------------------------
     raw_train = data.load_train()
@@ -35,7 +41,7 @@ def run(model_name: str = "hgb", n_splits: int = 5, output: str | None = None) -
     X, y = split_X_y(engineer_features(raw_train))
     X_test = engineer_features(raw_test)
 
-    model = get_model(model_name)
+    model = model if model is not None else get_model(model_name)
 
     # --- Cross-validate -------------------------------------------------------
     scores = cross_validate(model, X, y, n_splits=n_splits)

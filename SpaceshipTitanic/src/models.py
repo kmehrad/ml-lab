@@ -81,6 +81,19 @@ def get_model(name: str = "hgb", **preprocessor_kwargs) -> Pipeline:
     return Pipeline([("pre", pre), ("clf", clf)])
 
 
+def build_tuned_model(name: str, params: dict, **preprocessor_kwargs) -> Pipeline:
+    """Build a ``preprocessor + classifier`` pipeline with explicit classifier params.
+
+    Used by :mod:`tune` (Optuna) and by :mod:`train` when loading saved best
+    params. ``params`` overrides the classifier's defaults.
+    """
+    clf, wants_scaling = _build_classifier(name)
+    clf.set_params(**params)
+    preprocessor_kwargs.setdefault("scale_numeric", wants_scaling)
+    pre = build_preprocessor(**preprocessor_kwargs)
+    return Pipeline([("pre", pre), ("clf", clf)])
+
+
 def available_models() -> list[str]:
     """List the model names that can be built in the current environment."""
     names = ["logreg", "rf", "hgb"]
