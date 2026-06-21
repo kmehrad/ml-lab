@@ -20,8 +20,8 @@ import json
 import optuna
 
 from . import data
-from .evaluate import cross_validate, summarize_scores
-from .features import build_preprocessor, engineer_features, split_X_y
+from .evaluate import cross_validate
+from .features import engineer_train_test, split_X_y
 from .models import RANDOM_STATE, build_tuned_model
 
 # Models that don't need scaled inputs use the preprocessor as-is.
@@ -71,7 +71,8 @@ def tune(model_name: str = "lgbm", n_trials: int = 60, n_splits: int = 5):
     if model_name not in SUPPORTED:
         raise ValueError(f"Tuning not supported for {model_name!r}; choose from {sorted(SUPPORTED)}")
 
-    X, y = split_X_y(engineer_features(data.load_train()))
+    train_eng, _ = engineer_train_test(data.load_train(), data.load_test())
+    X, y = split_X_y(train_eng)
 
     def objective(trial: optuna.Trial) -> float:
         params = _suggest_params(trial, model_name)

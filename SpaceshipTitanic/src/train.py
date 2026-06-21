@@ -18,7 +18,7 @@ import pandas as pd
 
 from . import data
 from .evaluate import cross_validate, summarize_scores
-from .features import engineer_features, split_X_y
+from .features import engineer_train_test, split_X_y
 from .models import available_models, get_model
 
 
@@ -33,13 +33,13 @@ def run(
     Pass a pre-built ``model`` (e.g. an Optuna-tuned pipeline) to override the
     default :func:`models.get_model` estimator. Returns the submission DataFrame.
     """
-    # --- Load & engineer -----------------------------------------------------
+    # --- Load & engineer (jointly, so group/family stats span both sets) -----
     raw_train = data.load_train()
     raw_test = data.load_test()
     test_ids = raw_test[data.ID_COL]  # keep before engineering drops identifiers
 
-    X, y = split_X_y(engineer_features(raw_train))
-    X_test = engineer_features(raw_test)
+    train_eng, X_test = engineer_train_test(raw_train, raw_test)
+    X, y = split_X_y(train_eng)
 
     model = model if model is not None else get_model(model_name)
 

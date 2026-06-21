@@ -13,10 +13,18 @@ the project still works when they are not installed — call
 """
 from __future__ import annotations
 
-from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+import json
+
+from sklearn.ensemble import (
+    HistGradientBoostingClassifier,
+    RandomForestClassifier,
+    StackingClassifier,
+    VotingClassifier,
+)
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
+from .data import PROJECT_ROOT
 from .features import build_preprocessor
 
 RANDOM_STATE = 42
@@ -92,6 +100,58 @@ def build_tuned_model(name: str, params: dict, **preprocessor_kwargs) -> Pipelin
     preprocessor_kwargs.setdefault("scale_numeric", wants_scaling)
     pre = build_preprocessor(**preprocessor_kwargs)
     return Pipeline([("pre", pre), ("clf", clf)])
+
+
+def _load_tuned_params(name: str) -> dict:
+    """Load saved Optuna best params for ``name`` (empty dict if none saved)."""
+    path = PROJECT_ROOT / "reports" / f"best_params_{name}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
+
+
+def get_ensemble(
+    kind: str = "voting",
+    members: tuple[str, ...] = ("hgb", "lgbm", "xgb"),
+    use_tuned: bool = False,
+    **preprocessor_kwargs,
+) -> Pipeline:
+    """Build an ensemble of base classifiers over a single shared preprocessor.
+
+    Parameters
+    ----------
+    kind:
+        ``"voting"`` (soft-voting average of predicted probabilities) or
+        ``"stack"`` (out-of-fold stacking with a logistic-regression meta-model).
+    members:
+        Base model names (must be tree-based / unscaled-friendly).
+    use_tuned:
+        Apply saved Optuna params (``reports/best_params_<name>.json``) when set.
+    """
+    estimators = []
+    for name in members:
+        clf, _ = _build_classifier(name)
+        if use_tuned:
+            params = _load_tuned_params(name)
+            if params:
+                clf.set_params(**params)
+        estimators.append((name, clf))
+
+    if kind == "voting":
+        ensemble = VotingClassifier(estimators, voting="soft", n_jobs=-1)
+    elif kind in ("stack", "stacking"):
+        ensemble = StackingClassifier(
+            estimators,
+            final_estimator=LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
+            cv=5, n_jobs=-1,
+        )
+    else:
+        raise ValueError(f"Unknown ensemble kind: {kind!r} (use 'voting' or 'stack').")
+
+    # Tree-based members don't need scaling; share one unscaled preprocessor.
+    preprocessor_kwargs.setdefault("scale_numeric", False)
+    pre = build_preprocessor(**preprocessor_kwargs)
+    return Pipeline([("pre", pre), ("clf", ensemble)])
 
 
 def available_models() -> list[str]:
