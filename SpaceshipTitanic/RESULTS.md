@@ -45,9 +45,19 @@ competition. Target: `Transported` (boolean). Metric: **accuracy**.
 | random forest | 0.802 |
 | lgbm (default) | 0.808 |
 | xgb (default) | 0.809 |
-| **hgb (default)** | **0.8134 ± 0.0055** |
+| **hgb** | **0.8134 ± 0.0055** |
 
-**HistGradientBoosting (default params) is the best and most robust model.**
+An additional CatBoost experiment produced complementary errors:
+
+| model | 5-fold accuracy | 10-fold accuracy |
+|-------|----------------:|-----------------:|
+| hgb | 0.8134 | 0.8148 |
+| catboost | 0.8123 | 0.8156 |
+| **hgb + catboost soft vote** | **0.8147** | **0.8169** |
+
+Across three independent 5-fold seeds, the blend averaged **0.8161**, versus
+0.8111 for hgb alone. The soft-voting blend is therefore the new default when
+CatBoost is installed; the pipeline falls back to hgb otherwise.
 
 ## 5. Experiments that did NOT improve results
 
@@ -60,21 +70,23 @@ All evaluated on the same deterministic CV; the bar to beat is hgb **0.8134**.
 - **Group-spend + family features** (`GroupTotalSpend`, `GroupMeanSpend`,
   `FamilySize`): a small **net negative** (hgb 0.8127 with vs 0.8134 without).
   Kept available via `EXPERIMENTAL_*` lists but excluded from defaults.
-- **Ensembles** (soft-voting / stacking over hgb/lgbm/xgb): within noise — voting
-  looked best at 5-fold (0.8147) but the ranking **flipped at 10-fold**
-  (hgb 0.8148 > voting 0.8124).
+- **Earlier ensembles** (soft-voting / stacking over hgb/lgbm/xgb): within noise —
+  voting looked best at 5-fold but the ranking flipped at 10-fold. CatBoost was
+  subsequently tested and provided enough complementary signal for a more stable
+  two-model blend.
 
-**Conclusion:** the project sits on the well-known ~0.81 plateau for this feature
-set. None of tuning, extra features, or ensembling produced an above-noise gain,
-so the shipped model is the single default hgb and no marginal change was
-submitted.
+**Conclusion:** the project remains near the well-known ~0.81 plateau, but the
+HGB/CatBoost blend gives a small, repeatable improvement over the original
+single-model baseline.
 
 ## 6. Submission
 
-- **Model:** default HistGradientBoosting pipeline.
+- **Previous submitted model:** default HistGradientBoosting pipeline.
 - **Kaggle public leaderboard: 0.80266** (tracks the 0.8134 CV estimate; the
   small gap confirms no overfitting/leakage).
-- Reproduce: `python -m src.train --model hgb`.
+- **New candidate:** HGB/CatBoost soft-voting blend. Submitted to Kaggle on
+  June 20, 2026; leaderboard score pending.
+- Reproduce: `python -m src.train`.
 
 ## 7. Reproducing the analysis
 

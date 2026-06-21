@@ -8,4 +8,5 @@ seaborn>=0.12
 # Gradient boosting + hyperparameter tuning
 xgboost>=1.7
 lightgbm>=3.3
+catboost>=1.2
 optuna>=3.0
