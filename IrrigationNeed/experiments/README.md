@@ -16,6 +16,12 @@ Metric is **balanced accuracy** (OOF). All runs: 19 raw + 7 engineered features,
 
 Reproduce with `python -m src.train --model all`.
 
+**Submissions** (`python -m src.submit --model <name> --submit`):
+
+| Model | OOF balanced acc | Public LB | Private LB |
+|---|---:|---:|---:|
+| exp-005 HistGradientBoosting | 0.96954 | 0.96699 | 0.96936 |
+
 Suggested artifact naming:
 
 ```text

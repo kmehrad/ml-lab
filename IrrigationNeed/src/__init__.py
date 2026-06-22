@@ -23,6 +23,7 @@ from .features import (
     build_features,
 )
 from .preprocessing import build_preprocessor, prepare_tree_features
+from .submit import make_submission
 
 __all__ = [
     "CATEGORICAL_FEATURES",
@@ -45,4 +46,5 @@ __all__ = [
     "build_features",
     "build_preprocessor",
     "prepare_tree_features",
+    "make_submission",
 ]

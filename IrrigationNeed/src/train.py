@@ -121,8 +121,14 @@ def build_estimator(name: str, seed: int):
     raise ValueError(f"Unknown model {name!r}; choose from {sorted(MODEL_FAMILY)}")
 
 
-def _fit_predict_fold(name, estimator, X_tr, y_tr, X_va):
-    """Fit one fold with balanced weights and return validation class codes."""
+def fit_predict(name, estimator, X_tr, y_tr, X_va):
+    """Fit ``estimator`` with balanced weights and return predicted class codes.
+
+    Shared by the cross-validation loop (fit on a training fold, predict the
+    validation fold) and by submission generation (fit on all of train, predict
+    test). Each branch applies the per-library categorical and class-balancing
+    convention.
+    """
     cat_cols = [c for c in CATEGORICAL_FEATURES if c in X_tr.columns]
     if name in ("baseline", "logreg"):
         # class_weight handles balancing inside LogisticRegression.
@@ -162,7 +168,7 @@ def run_cv(name: str, folds: int = 5, seed: int = 42, sample: int | None = None)
         X_tr = pre.transform(X.iloc[tr_idx])
         X_va = pre.transform(X.iloc[va_idx])
         estimator = build_estimator(name, seed)
-        oof[va_idx] = _fit_predict_fold(name, estimator, X_tr, y[tr_idx], X_va)
+        oof[va_idx] = fit_predict(name, estimator, X_tr, y[tr_idx], X_va)
         print(f"  [{name}] fold {fold}/{folds} done", flush=True)
     elapsed = time.perf_counter() - start
 

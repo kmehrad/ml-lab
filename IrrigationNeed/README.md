@@ -194,9 +194,27 @@ Per-model metrics and out-of-fold arrays are written to `experiments/artifacts/`
   are the best score-for-time** choices; **CatBoost is ~10× slower for no gain** here.
 - The score ceiling is now `Medium`↔`High` confusion, not the `Low` majority.
 
+### First submission
+
+`src/submit.py` fits the chosen model on all training data, predicts test, validates
+against `sample_submission.csv`, and (with `--submit`) uploads via the Kaggle CLI:
+
+```bash
+python -m src.submit --model histgb --submit -m "HistGB, engineered features"
+```
+
+The HistGradientBoosting submission scored:
+
+| Model | OOF balanced acc | Public LB | Private LB |
+|---|---:|---:|---:|
+| HistGradientBoosting | 0.96954 | 0.96699 | 0.96936 |
+
+CV and leaderboard agree to within ~0.003 (private LB 0.96936 ≈ CV 0.96954) — expected
+given the EDA showed train and test are drawn from the same distribution, and it
+confirms the local CV is a reliable guide for further tuning.
+
 **Next steps:** hyperparameter tuning of the top GBDTs, per-class decision-threshold
-tuning on OOF predictions, an XGBoost/HistGB/LightGBM blend, and a held-out submission
-to check CV↔leaderboard agreement.
+tuning on OOF predictions, and an XGBoost/HistGB/LightGBM blend.
 
 ## Initial workflow
 
