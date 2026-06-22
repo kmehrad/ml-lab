@@ -47,24 +47,39 @@ truth. Lower is better; uniform floor = 1.0986.
 | — | uniform (1/3) | 1.0986 | — | theoretical floor |
 | — | class prior | 1.0972 | — | priors carry ~no signal |
 | 1 | **LightGBM baseline** | **1.01541** | **−0.082** | 5-fold OOF; folds 1.013–1.018 (stable) |
-| 2 | DeBERTa-v3-base (fold 0, no markers, 2 ep) | 1.06397 | −0.033 | single fold; learns but < baseline |
+| 2 | DeBERTa-v3-base (fold 0, 2 ep) | 1.06397 | −0.033 | single fold; learns but < baseline |
+| 2 | **DeBERTa-v3-large (fold 0, 2 ep)** | **1.00451** | **−0.093** | single fold; first model to beat baseline |
+| 2 | **LGBM + large blend (fold 0)** | **0.99589** | **−0.101** | 0.4·LGBM + 0.6·large; breaks below 1.0 |
+
+### Submissions (public leaderboard)
+
+| submission | public LB | OOF | notes |
+|------------|----------:|----:|-------|
+| LightGBM baseline (`kaggle/lgbm_baseline/`) | **1.01515** | 1.0161 | CV ≈ LB — OOF is a trustworthy proxy |
+
+The first submission validated the full **code-competition** pipeline end-to-end:
+a self-contained offline kernel that finds the mounted data, trains 5-fold
+LightGBM, and emits `submission.csv`, submitted via
+`kaggle competitions submit -k <kernel> -v <ver> -f submission.csv`. Public LB
+(1.01515) matched local OOF (1.0161) almost exactly — no leak, CV is reliable.
 
 **Phase 1 — LightGBM baseline** (`src/train_baseline.py`): engineered
 length/format diffs + TF-IDF→SVD text features fed to LightGBM on the shared
 folds. OOF **1.01541** — a real but weak floor, as expected when a tabular
-approach is applied to a fundamentally NLP sequence-pair task. Its value is
-establishing the CV harness, `FeatureBuilder`, and submission format; the score
-will be won by the transformer/LLM models in Phases 2–3 (see [PLAN.md](PLAN.md)).
+approach is applied to a fundamentally NLP sequence-pair task. Establishes the
+CV harness, `FeatureBuilder`, and submission format.
 
 **Phase 2 — DeBERTa-v3 fine-tune** (`src/train_deberta.py`, GPU workstation):
-sequence-pair input `[CLS] prompt [SEP] response_a [SEP] response_b [SEP]` with
-per-field head+tail truncation (`max_len` 1280) and **A/B-swap TTA** at eval.
-First fold-0 run lands at **1.06397** — it *learns* (below the 1.0986 random
-floor, and gradients verified by overfitting 64 examples to ~0.15) but still
-trails the Phase-1 baseline. Validation was **still descending at epoch 1**
-(undertrained), so the current tuning run adds **textual role markers**
-(`"Prompt:" / "Response A:" / "Response B:"`) and extends to **4 epochs**;
-results pending. Target remains OOF ≈ 0.95–1.00 before scaling to full 5-fold CV.
+sequence-pair input with textual role markers (`"Prompt:" / "Response A:" /
+"Response B:"`), per-field head+tail truncation, and **A/B-swap TTA** at eval.
+- **base** plateaus at ~1.06 (single fold) — it *learns* (gradients verified by
+  overfitting 64 examples to ~0.15) but trails the baseline; diagnosed as a
+  capacity limit, not a bug (labels/alignment/eval all check out, calibration
+  has no headroom, and it adds ~nothing to a blend).
+- **large** (max_len 1024, bs 2×8, lr 1e-5) hits **1.00451** on fold 0 — the
+  first model to beat the baseline — and blends with LightGBM to **0.99589**
+  (the two agree only 68% of the time, so they are complementary). Full 5-fold
+  CV is the next step to a shippable OOF + blended submission.
 
 > **Infra note.** DeBERTa-v3 training requires a pinned stack — see
 > `setup_env.sh`. On `transformers 5.10` the rewritten DeBERTa-v2 backward

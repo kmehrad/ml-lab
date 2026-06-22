@@ -64,12 +64,14 @@ Concatenate with explicit role markers, e.g.:
   (folds 1.013–1.018), ≈0.082 above priors — a real but weak floor, as expected.
   Establishes the CV harness, `FeatureBuilder`, and submission format.
 - **Phase 2 — DeBERTa-v3 fine-tune (Tier B)** *(in progress — `src/train_deberta.py`)*
-  First genuine model. Target OOF log loss ≈ 0.95–1.00. Establishes the input
-  format, truncation, and inference notebook end-to-end. Runs on the GPU
-  workstation under a pinned stack (`setup_env.sh`: torch 2.5.1 + transformers
-  4.46.3 — `transformers 5.10` has broken DeBERTa-v2 gradients). First fold-0
-  run = **1.06397** (learns but trails Phase 1, undertrained); tuning with role
-  markers + 4 epochs before committing to full 5-fold CV.
+  Target OOF log loss ≈ 0.95–1.00. Runs on the GPU workstation under a pinned
+  stack (`setup_env.sh`: torch 2.5.1 + transformers 4.46.3 — `transformers 5.10`
+  has broken DeBERTa-v2 gradients). **base** plateaus ~1.06 (capacity-limited);
+  **large** hits **1.00451** on fold 0 (first to beat Phase 1) and blends with
+  LightGBM to **0.99589**. Next: full 5-fold large for a shippable OOF + blend.
+  First Kaggle submission done (LightGBM baseline, **public LB 1.01515**,
+  CV ≈ LB) — see `kaggle/lgbm_baseline/`; it validates the offline code-comp
+  pipeline that the large model's inference kernel will reuse.
 - **Phase 3 — Gemma-2 9B / Llama-3 8B QLoRA (Tier A)** *(the contender)*
   4-bit QLoRA on Kaggle/Colab GPU. Target sub-0.90 OOF. This is where the score is won.
 - **Phase 4 — Robustness & ensemble**
