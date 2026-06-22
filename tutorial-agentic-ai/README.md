@@ -82,7 +82,8 @@ uv run streamlit run apps/<app_name>/app.py
 .
 ├── main.py
 ├── notebooks/
-│   ├── call_api.ipynb
+│   ├── call_llm.ipynb
+│   ├── single_agents.ipynb
 │   └── rag_basics.ipynb
 ├── src/
 │   └── download_arxiv_papers.py
