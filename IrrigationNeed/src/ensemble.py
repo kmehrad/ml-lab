@@ -116,6 +116,8 @@ def _build(name: str, seed: int):
 
 def _fit_proba(name, X_tr, y_tr, X_eval_list, seed):
     """Fit one base model; return predict_proba for each frame in X_eval_list."""
+    if name == "ovr":
+        return _fit_ovr_proba(X_tr, y_tr, X_eval_list, seed)
     cat_cols = [c for c in CATEGORICAL_FEATURES if c in X_tr.columns]
     model = _build(name, seed)
     if name == "lgbm":
@@ -127,6 +129,30 @@ def _fit_proba(name, X_tr, y_tr, X_eval_list, seed):
     else:  # xgb, histgb handle category dtype natively
         model.fit(X_tr, y_tr)
     return [model.predict_proba(X) for X in X_eval_list]
+
+
+def _fit_ovr_proba(X_tr, y_tr, X_eval_list, seed):
+    """One-vs-rest LightGBM: a dedicated binary model per class.
+
+    Each class gets its own binary learner, so the rare ``High`` boundary is
+    modelled directly instead of competing inside a single softmax. The three
+    per-class scores are row-normalized into a probability vector. The winning
+    write-up combined exactly this with multiclass models.
+    """
+    from lightgbm import LGBMClassifier
+
+    cat_cols = [c for c in CATEGORICAL_FEATURES if c in X_tr.columns]
+    scores = [np.zeros((len(X), N_CLASSES)) for X in X_eval_list]
+    for c in range(N_CLASSES):
+        clf = LGBMClassifier(
+            objective="binary", n_estimators=700, learning_rate=0.03, num_leaves=96,
+            subsample=0.8, subsample_freq=1, colsample_bytree=0.8, reg_lambda=1.0,
+            random_state=seed, n_jobs=-1, verbose=-1,
+        )
+        clf.fit(X_tr, (y_tr == c).astype(int), categorical_feature=cat_cols)
+        for i, X in enumerate(X_eval_list):
+            scores[i][:, c] = clf.predict_proba(X)[:, 1]
+    return [s / s.sum(axis=1, keepdims=True) for s in scores]
 
 
 # --------------------------------------------------------------------------- #
@@ -145,31 +171,33 @@ def compute_oof(models=BASE_MODELS, folds=5, seed=SEED, sample=None, refresh=Fal
     tag = f"_s{sample}" if sample else ""
     cached = {m: ARTIFACTS_DIR / f"oof_{m}{tag}.npy" for m in models}
     cached_te = {m: ARTIFACTS_DIR / f"test_{m}{tag}.npy" for m in models}
-    if not refresh and all(p.exists() for p in cached.values()):
-        oof = {m: np.load(cached[m]) for m in models}
-        test_p = {m: np.load(cached_te[m]) for m in models}
-        np.save(ARTIFACTS_DIR / f"y_oof{tag}.npy", y)
-        return oof, test_p, y
-
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    oof = {m: np.zeros((len(y), N_CLASSES)) for m in models}
-    test_p = {m: np.zeros((len(X_test), N_CLASSES)) for m in models}
-    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
-    for fold, (tr_idx, va_idx) in enumerate(skf.split(X, y), start=1):
-        pre = build_preprocessor("tree").fit(X.iloc[tr_idx], y[tr_idx])
-        X_tr = add_interactions(pre.transform(X.iloc[tr_idx]))
-        X_va = add_interactions(pre.transform(X.iloc[va_idx]))
-        X_te = add_interactions(pre.transform(X_test))
-        for m in models:
-            va_proba, te_proba = _fit_proba(m, X_tr, y[tr_idx], [X_va, X_te], seed)
-            oof[m][va_idx] = va_proba
-            test_p[m] += te_proba / folds
-            print(f"  fold {fold}/{folds} [{m}] "
-                  f"bal_acc={balanced_accuracy_score(y[va_idx], va_proba.argmax(1)):.4f}",
-                  flush=True)
-    for m in models:
-        np.save(cached[m], oof[m])
-        np.save(cached_te[m], test_p[m])
+
+    # Only (re)compute models that are missing from the cache.
+    need = [m for m in models if refresh or not cached[m].exists() or not cached_te[m].exists()]
+    if need:
+        print(f"computing OOF for: {need} (reusing cache for {[m for m in models if m not in need]})")
+        oof_new = {m: np.zeros((len(y), N_CLASSES)) for m in need}
+        test_new = {m: np.zeros((len(X_test), N_CLASSES)) for m in need}
+        skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
+        for fold, (tr_idx, va_idx) in enumerate(skf.split(X, y), start=1):
+            pre = build_preprocessor("tree").fit(X.iloc[tr_idx], y[tr_idx])
+            X_tr = add_interactions(pre.transform(X.iloc[tr_idx]))
+            X_va = add_interactions(pre.transform(X.iloc[va_idx]))
+            X_te = add_interactions(pre.transform(X_test))
+            for m in need:
+                va_proba, te_proba = _fit_proba(m, X_tr, y[tr_idx], [X_va, X_te], seed)
+                oof_new[m][va_idx] = va_proba
+                test_new[m] += te_proba / folds
+                print(f"  fold {fold}/{folds} [{m}] "
+                      f"bal_acc={balanced_accuracy_score(y[va_idx], va_proba.argmax(1)):.4f}",
+                      flush=True)
+        for m in need:
+            np.save(cached[m], oof_new[m])
+            np.save(cached_te[m], test_new[m])
+
+    oof = {m: np.load(cached[m]) for m in models}
+    test_p = {m: np.load(cached_te[m]) for m in models}
     np.save(ARTIFACTS_DIR / f"y_oof{tag}.npy", y)
     return oof, test_p, y
 
