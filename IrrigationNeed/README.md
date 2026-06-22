@@ -155,6 +155,49 @@ X_model = pipe.transform(X)
 
 Run the tests with `python -m pytest`.
 
+## Modeling
+
+Training and scoring live in `src/train.py`. Every model is trained with **balanced
+class weights** and scored on **out-of-fold predictions** with balanced accuracy plus
+per-class recall. The preprocessing pipeline is fit inside each fold (training rows
+only), so the `aridity_index` statistics, scaler, and one-hot encoder never leak.
+
+```bash
+python -m src.train --model baseline     # class-weighted logistic regression
+python -m src.train --model lgbm --folds 5
+python -m src.train --model all          # baseline + 4 gradient-boosted trees
+python -m src.train --model lgbm --sample 50000   # quick smoke run
+```
+
+Per-model metrics and out-of-fold arrays are written to `experiments/artifacts/`
+(`model_results.json`, `model_results.csv`, `<model>_oof.npy`).
+
+### Results (5-fold stratified CV, seed 42, full 630k train rows)
+
+| Model | Family | Balanced acc | Accuracy | Recall Low | Recall Medium | Recall High | Time |
+|---|---|---:|---:|---:|---:|---:|---:|
+| **HistGradientBoosting** | tree | **0.96954** | 0.98407 | 0.9954 | 0.9702 | 0.9431 | 94 s |
+| XGBoost | tree | 0.96939 | 0.98405 | 0.9955 | 0.9699 | 0.9427 | 74 s |
+| CatBoost | tree | 0.96779 | 0.98057 | 0.9928 | 0.9647 | 0.9459 | 751 s |
+| LightGBM | tree | 0.96758 | 0.98400 | 0.9944 | 0.9721 | 0.9362 | 160 s |
+| Logistic regression (baseline) | linear | 0.85861 | 0.85310 | 0.8931 | 0.7875 | 0.8952 | 20 s |
+
+**Takeaways**
+- The class-weighted **logistic baseline scores 0.859** balanced accuracy and sets the
+  floor. Note its profile: high `High` recall but weak `Medium` (0.79) — linear class
+  weighting over-favours the minority and confuses the middle class.
+- **Gradient-boosted trees jump to ~0.97** (+0.11 over baseline) and, crucially, lift
+  the rare `High` class to ~0.94 recall *without* sacrificing `Low`/`Medium` — the
+  engineered agronomic features plus tree interactions resolve the imbalance far better
+  than reweighting a linear model.
+- The four GBDTs are within **0.002** of each other. **HistGradientBoosting and XGBoost
+  are the best score-for-time** choices; **CatBoost is ~10× slower for no gain** here.
+- The score ceiling is now `Medium`↔`High` confusion, not the `Low` majority.
+
+**Next steps:** hyperparameter tuning of the top GBDTs, per-class decision-threshold
+tuning on OOF predictions, an XGBoost/HistGB/LightGBM blend, and a held-out submission
+to check CV↔leaderboard agreement.
+
 ## Initial workflow
 
 1. Explore the features and target in `notebooks/`.

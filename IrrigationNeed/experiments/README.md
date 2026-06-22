@@ -3,9 +3,18 @@
 Use one row per meaningful experiment. Keep generated artifacts in `artifacts/` and
 trained estimators in `../models/`.
 
-| ID | Date | Features | Model | Validation | OOF Metric | Notes |
-|---|---|---|---|---|---:|---|
-| _none yet_ | | | | | | |
+Metric is **balanced accuracy** (OOF). All runs: 19 raw + 7 engineered features,
+5-fold stratified CV, seed 42, balanced class weights, full 630k train rows.
+
+| ID | Date | Model | Validation | OOF balanced acc | Notes |
+|---|---|---|---|---:|---|
+| exp-001 | 2026-06-22 | Logistic regression | 5-fold stratified | 0.85861 | Baseline floor; over-favours `High`, weak on `Medium` |
+| exp-002 | 2026-06-22 | LightGBM | 5-fold stratified | 0.96758 | Native categoricals, `class_weight="balanced"` |
+| exp-003 | 2026-06-22 | XGBoost | 5-fold stratified | 0.96939 | `hist` + `enable_categorical`, balanced sample weights |
+| exp-004 | 2026-06-22 | CatBoost | 5-fold stratified | 0.96779 | `auto_class_weights="Balanced"`; ~10x slower, no gain |
+| exp-005 | 2026-06-22 | HistGradientBoosting | 5-fold stratified | 0.96954 | Best so far; best score-for-time with XGBoost |
+
+Reproduce with `python -m src.train --model all`.
 
 Suggested artifact naming:
 
