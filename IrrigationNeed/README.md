@@ -127,6 +127,34 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Feature pipeline
+
+Implemented in `src/` (see `reports/EDA_FINDINGS.md` for the rationale):
+
+- `src/data.py` — fixed column schema, CSV loading with stable categorical levels,
+  and ordinal target encoding (`Low`/`Medium`/`High` → `0`/`1`/`2`).
+- `src/features.py` — `IrrigationFeatureEngineer`, which appends agronomic features:
+  an evapotranspiration (water-demand) proxy `et_demand`, demand/supply ratios
+  (`temp_to_moisture`, `moisture_rain_ratio`, `wind_dryness`), a standardized
+  `aridity_index` composite of the four strongest EDA signals (fit on train only to
+  avoid leakage), and the `is_rainfed` / `no_mulch` "no practice applied" flags.
+- `src/preprocessing.py` — `build_preprocessor(kind)` returns a fit/transform pipeline:
+  `"tree"` keeps native `category` dtypes for LightGBM/CatBoost/XGBoost; `"linear"`
+  one-hot encodes categoricals and standardizes numerics. The clean data needs no
+  imputation, skew transforms, or outlier handling.
+
+```python
+from src import load_raw, split_features_target, encode_target, build_preprocessor
+
+train = load_raw("train")
+X, y = split_features_target(train)
+y = encode_target(y)
+pipe = build_preprocessor("tree").fit(X, y)   # fit on train fold only
+X_model = pipe.transform(X)
+```
+
+Run the tests with `python -m pytest`.
+
 ## Initial workflow
 
 1. Explore the features and target in `notebooks/`.
