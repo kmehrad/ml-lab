@@ -277,6 +277,45 @@ relies on a publicly-shared insight from the competition's notebooks/write-ups, 
 JavaScript-rendered and could not be extracted programmatically here. Closing the final
 ~0.008 is left as an open problem pending that insight.
 
+## Round 2: hierarchical decomposition + multi-FE ensembling
+
+Implemented in `src/hierarchical.py`, following the competition winners' core idea:
+**`Low` and `High` are almost never confused**, so the 3-way problem decomposes into two
+easier binary problems.
+
+- **Model 1** — `Low` vs Rest on the whole dataset → `p1 = P(Low)`.
+- **Model 2** — `Medium` vs `High`, trained on the rows Model 1 routes as Rest (matches
+  the inference distribution), with OOF for the whole dataset → `p2 = P(High | not Low)`.
+- Recombine: `P(Low)=p1`, `P(Medium)=(1-p1)(1-p2)`, `P(High)=(1-p1)p2`.
+
+This is run under three feature-engineering variants (`raw`, `eng`, `eng_int`) and two
+base learners (LightGBM, XGBoost), then ensembled with the Round-1 multiclass caches and
+threshold-tuned.
+
+```bash
+python -m src.hierarchical --submit
+```
+
+| Recipe | OOF argmax | OOF tuned | Public LB | Private LB |
+|---|---:|---:|---:|---:|
+| Best hierarchical component | 0.9621 | 0.9721 | — | — |
+| Hierarchical multi-FE blend | 0.9623 | **0.97228** | 0.96990 | **0.97205** |
+
+The decomposition slightly improves calibration (per-component tuned 0.972 vs 0.971 for
+multiclass) and the blend reaches private **0.97205** — the best result here. But the
+per-class recalls remain Low 0.996 / Medium 0.962 / High 0.955: the `Medium`↔`High`
+discrimination, not the modeling framework, is still the binding constraint. Reaching the
+0.980 cluster evidently needs far larger FE/seed/model diversity (or a data insight) than
+is reproduced here; the core winning *technique* is implemented and documented.
+
+### Score progression
+
+| Round | Approach | Private LB |
+|---|---|---:|
+| 0 | HistGradientBoosting (single, balanced) | 0.96936 |
+| 1 | Stacked GBDT ensemble + threshold tuning | 0.97166 |
+| 2 | Hierarchical + multi-FE ensemble | **0.97205** |
+
 ## Initial workflow
 
 1. Explore the features and target in `notebooks/`.

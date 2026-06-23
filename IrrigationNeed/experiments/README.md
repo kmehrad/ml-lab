@@ -22,6 +22,7 @@ Reproduce with `python -m src.train --model all`.
 |---|---:|---:|---:|
 | exp-005 HistGradientBoosting (`src.submit`) | 0.96954 | 0.96699 | 0.96936 |
 | exp-006 Stacked ensemble + threshold tuning (`src.ensemble`) | 0.97132 | 0.96952 | 0.97166 |
+| exp-007 Hierarchical + multi-FE ensemble (`src.hierarchical`) | 0.97228 | 0.96990 | 0.97205 |
 
 **exp-006 notes** — `src/ensemble.py`: calibrated base learners (LGBM/XGB/HistGB/CatBoost
 + one-vs-rest LGBM), equal blend and logistic stack, per-class weight optimization for
