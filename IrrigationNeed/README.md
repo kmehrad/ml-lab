@@ -216,6 +216,106 @@ confirms the local CV is a reliable guide for further tuning.
 **Next steps:** hyperparameter tuning of the top GBDTs, per-class decision-threshold
 tuning on OOF predictions, and an XGBoost/HistGB/LightGBM blend.
 
+## Ensemble, stacking & threshold optimization
+
+`src/ensemble.py` targets the balanced-accuracy metric directly. Base learners are
+trained on the **natural** class distribution (so `predict_proba` is well calibrated),
+producing leakage-safe OOF and fold-averaged test probabilities. It then:
+
+1. **Optimizes a per-class weight vector** on OOF probabilities — prediction is
+   `argmax_c (w_c · p_c)`, which is the Bayes rule for balanced accuracy.
+2. **Blends** the base models (equal weight) and **stacks** a logistic meta-learner.
+3. Adds a **one-vs-rest** LightGBM (a dedicated binary model per class) for diversity.
+
+```bash
+python -m src.ensemble --models lgbm xgb histgb catboost ovr --folds 5 --submit
+```
+
+### Results (5-fold OOF, 630k rows)
+
+| Recipe | argmax bal-acc | Threshold-tuned bal-acc |
+|---|---:|---:|
+| LightGBM | 0.9618 | 0.9707 |
+| XGBoost | 0.9620 | 0.9711 |
+| HistGradientBoosting | 0.9621 | 0.9705 |
+| CatBoost | 0.9608 | 0.9674 |
+| One-vs-rest LightGBM | 0.9615 | 0.9710 |
+| Equal-weight blend | 0.9621 | 0.9713 |
+| **Stacked logistic** | 0.9617 | **0.9713** |
+
+The stacked submission scored **public 0.96952 / private 0.97166** — an improvement over
+the single-model 0.96936, and the private score landed *above* the OOF estimate, so the
+threshold tuning generalizes cleanly (no overfit).
+
+| Submission | OOF tuned | Public LB | Private LB |
+|---|---:|---:|---:|
+| HistGradientBoosting (single) | 0.96954 | 0.96699 | 0.96936 |
+| **Stacked ensemble + threshold tuning** | 0.97132 | 0.96952 | **0.97166** |
+
+### Reaching the ~0.980 leaderboard cluster — open problem
+
+The target of **0.98 private** is hard in a specific, informative way. The leaderboard is
+extraordinarily tightly clustered: rank 1 = 0.98158 and **rank 500 (of 4315) = 0.98006**
+— hundreds of teams within 0.0015 of each other. That is the signature of a *specific,
+widely-shared unlock* (a near-deterministic rule or feature), not incremental modeling.
+
+Systematically ruled out as the cause of our ~0.97 ceiling:
+
+- **Model capacity** — a heavily-tuned, early-stopped LightGBM (best iter 643, deep,
+  regularized) matches the smaller models exactly (0.960 argmax). Not under-capacity.
+- **One-vs-rest** — converges to the same ~0.971 tuned; no break.
+- **Regression-to-latent** (treating the ordered classes as quantiles of a smooth score) —
+  *worse* (0.966).
+- **External / original data** — the Playground source dataset (`TARP.csv`) has an
+  entirely different schema (`N`/`P`/`K`/`Pressure`/`Status`…) and cannot be appended.
+- **Local determinism** — 1-NN scores only 0.63 balanced accuracy, so labels are not
+  locally smooth; the structure GBDTs capture (0.96) is global, and all GBDT variants
+  converge there.
+
+Every reproducible lever plateaus at ~0.971–0.972. The 0.980 cluster almost certainly
+relies on a publicly-shared insight from the competition's notebooks/write-ups, which are
+JavaScript-rendered and could not be extracted programmatically here. Closing the final
+~0.008 is left as an open problem pending that insight.
+
+## Round 2: hierarchical decomposition + multi-FE ensembling
+
+Implemented in `src/hierarchical.py`, following the competition winners' core idea:
+**`Low` and `High` are almost never confused**, so the 3-way problem decomposes into two
+easier binary problems.
+
+- **Model 1** — `Low` vs Rest on the whole dataset → `p1 = P(Low)`.
+- **Model 2** — `Medium` vs `High`, trained on the rows Model 1 routes as Rest (matches
+  the inference distribution), with OOF for the whole dataset → `p2 = P(High | not Low)`.
+- Recombine: `P(Low)=p1`, `P(Medium)=(1-p1)(1-p2)`, `P(High)=(1-p1)p2`.
+
+This is run under three feature-engineering variants (`raw`, `eng`, `eng_int`) and two
+base learners (LightGBM, XGBoost), then ensembled with the Round-1 multiclass caches and
+threshold-tuned.
+
+```bash
+python -m src.hierarchical --submit
+```
+
+| Recipe | OOF argmax | OOF tuned | Public LB | Private LB |
+|---|---:|---:|---:|---:|
+| Best hierarchical component | 0.9621 | 0.9721 | — | — |
+| Hierarchical multi-FE blend | 0.9623 | **0.97228** | 0.96990 | **0.97205** |
+
+The decomposition slightly improves calibration (per-component tuned 0.972 vs 0.971 for
+multiclass) and the blend reaches private **0.97205** — the best result here. But the
+per-class recalls remain Low 0.996 / Medium 0.962 / High 0.955: the `Medium`↔`High`
+discrimination, not the modeling framework, is still the binding constraint. Reaching the
+0.980 cluster evidently needs far larger FE/seed/model diversity (or a data insight) than
+is reproduced here; the core winning *technique* is implemented and documented.
+
+### Score progression
+
+| Round | Approach | Private LB |
+|---|---|---:|
+| 0 | HistGradientBoosting (single, balanced) | 0.96936 |
+| 1 | Stacked GBDT ensemble + threshold tuning | 0.97166 |
+| 2 | Hierarchical + multi-FE ensemble | **0.97205** |
+
 ## Initial workflow
 
 1. Explore the features and target in `notebooks/`.
