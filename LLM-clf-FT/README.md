@@ -42,14 +42,14 @@ models/weights must be attached as Kaggle datasets).
 OOF log loss on the shared stratified 5-fold split (seed 42) is the source of
 truth. Lower is better; uniform floor = 1.0986.
 
-| phase | model | log loss | vs prior | notes |
-|-------|-------|---------:|---------:|-------|
+| phase | model | OOF log loss | vs prior | notes |
+|-------|-------|------------:|---------:|-------|
 | — | uniform (1/3) | 1.0986 | — | theoretical floor |
 | — | class prior | 1.0972 | — | priors carry ~no signal |
 | 1 | **LightGBM baseline** | **1.01541** | **−0.082** | 5-fold OOF; folds 1.013–1.018 (stable) |
 | 2 | DeBERTa-v3-base (fold 0, 2 ep) | 1.06397 | −0.033 | single fold; learns but < baseline |
-| 2 | **DeBERTa-v3-large (fold 0, 2 ep)** | **1.00451** | **−0.093** | single fold; first model to beat baseline |
-| 2 | **LGBM + large blend (fold 0)** | **0.99589** | **−0.101** | 0.4·LGBM + 0.6·large; breaks below 1.0 |
+| 2 | **DeBERTa-v3-large** (5-fold, 2 ep) | **0.99963** | **−0.098** | folds 0.996–1.003; first to beat baseline |
+| 2 | **LightGBM + large blend** | **0.99221** | **−0.105** | 0.35·LGBM + 0.65·large (full OOF) |
 
 ### Submissions (public leaderboard)
 
@@ -76,10 +76,17 @@ sequence-pair input with textual role markers (`"Prompt:" / "Response A:" /
   overfitting 64 examples to ~0.15) but trails the baseline; diagnosed as a
   capacity limit, not a bug (labels/alignment/eval all check out, calibration
   has no headroom, and it adds ~nothing to a blend).
-- **large** (max_len 1024, bs 2×8, lr 1e-5) hits **1.00451** on fold 0 — the
-  first model to beat the baseline — and blends with LightGBM to **0.99589**
-  (the two agree only 68% of the time, so they are complementary). Full 5-fold
-  CV is the next step to a shippable OOF + blended submission.
+- **large** (max_len 1024, bs 2×8, lr 1e-5, 2 epochs) reaches **0.99963** OOF
+  over the full 5 folds (per-fold 0.99845 / 0.99977 / 0.99581 / 1.00116 /
+  1.00297 — tight) — the first model to beat the baseline. Blended with the
+  LightGBM OOF (**0.35·LGBM + 0.65·large**) it drops to **0.99221**; the two
+  agree only ~68% of the time, so they are genuinely complementary. Both gains
+  are well above CV noise.
+
+The blended OOF (0.99221) is not yet on the leaderboard: the CV run computed OOF
+but did not checkpoint weights, so the offline inference kernel still needs a
+saved large model (retrain-with-save → upload as a Kaggle dataset → GPU kernel
+running large + A/B-swap TTA, blended in-kernel with LightGBM).
 
 > **Infra note.** DeBERTa-v3 training requires a pinned stack — see
 > `setup_env.sh`. On `transformers 5.10` the rewritten DeBERTa-v2 backward

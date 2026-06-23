@@ -67,11 +67,12 @@ Concatenate with explicit role markers, e.g.:
   Target OOF log loss ≈ 0.95–1.00. Runs on the GPU workstation under a pinned
   stack (`setup_env.sh`: torch 2.5.1 + transformers 4.46.3 — `transformers 5.10`
   has broken DeBERTa-v2 gradients). **base** plateaus ~1.06 (capacity-limited);
-  **large** hits **1.00451** on fold 0 (first to beat Phase 1) and blends with
-  LightGBM to **0.99589**. Next: full 5-fold large for a shippable OOF + blend.
-  First Kaggle submission done (LightGBM baseline, **public LB 1.01515**,
-  CV ≈ LB) — see `kaggle/lgbm_baseline/`; it validates the offline code-comp
-  pipeline that the large model's inference kernel will reuse.
+  **large** full 5-fold OOF = **0.99963** (first to beat Phase 1), blending with
+  LightGBM to **0.99221** — both above CV noise. First Kaggle submission done
+  (LightGBM baseline, **public LB 1.01515**, CV ≈ LB) — see `kaggle/lgbm_baseline/`.
+  **Remaining:** save large weights (the CV run didn't checkpoint), upload as a
+  Kaggle dataset, and build the GPU inference kernel (large + A/B-swap TTA,
+  blended in-kernel with LightGBM) to put the ~0.99 blend on the leaderboard.
 - **Phase 3 — Gemma-2 9B / Llama-3 8B QLoRA (Tier A)** *(the contender)*
   4-bit QLoRA on Kaggle/Colab GPU. Target sub-0.90 OOF. This is where the score is won.
 - **Phase 4 — Robustness & ensemble**
