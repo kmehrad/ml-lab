@@ -19,7 +19,7 @@ from .features import (
     build_features,
 )
 from .preprocessing import build_preprocessor, prepare_tree_features
-from .train import build_estimator, fit_predict_proba, run_cv
+from .train import artifact_key, build_estimator, run_cv
 from .blend import find_blend
 from .submit import make_submission
 
@@ -40,8 +40,8 @@ __all__ = [
     "build_features",
     "build_preprocessor",
     "prepare_tree_features",
+    "artifact_key",
     "build_estimator",
-    "fit_predict_proba",
     "run_cv",
     "find_blend",
     "make_submission",

@@ -1,96 +1,69 @@
-"""Fit the chosen model(s) on all training data and build a Kaggle submission.
+"""Build a Kaggle submission from saved bagged test predictions.
 
-The submission is the positive-class probability (ROC-AUC metric). Pass a single
-model name to submit that model, or ``blend`` to apply the rank-average weights
-found by ``src.blend`` across its constituent models. The preprocessing pipeline
-is fit on the full training set and applied to test. The output is validated
-against ``sample_submission.csv`` before (optionally) uploading via Kaggle CLI.
+``src.train`` saves bagged test probabilities per model (``{key}_test.npy``) and
+``src.blend`` saves the blended test probabilities (``blend_test.npy``). This
+module turns either into a validated submission CSV and optionally uploads it —
+no model refitting needed.
 
 Usage
 -----
-    python -m src.submit --model lgbm                 # write outputs/lgbm_submission.csv
-    python -m src.submit --model blend
-    python -m src.submit --model blend --use-original
-    python -m src.submit --model blend --submit -m "Blend LGBM+XGB+Cat, CV 0.83x"
+    python -m src.blend                                   # build the blend first
+    python -m src.submit --model blend                    # outputs/blend_submission.csv
+    python -m src.submit --model lgbm_aug
+    python -m src.submit --model blend --submit -m "diversity blend"
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import rankdata
 
-from .data import ID_COLUMN, RAW_FEATURES, TARGET_COLUMN, load_raw, split_features_target
-from .preprocessing import build_preprocessor
-from .train import MODEL_FAMILY, build_estimator, fit_predict_proba, _load_training_data
-from .blend import WEIGHTS_JSON
+from .data import ID_COLUMN, load_raw
+from .blend import BLEND_TEST
 
 COMPETITION = "playground-series-s5e12"
+ARTIFACTS_DIR = Path(__file__).resolve().parents[1] / "experiments" / "artifacts"
 OUTPUTS_DIR = Path(__file__).resolve().parents[1] / "outputs"
 RAW_DIR = Path(__file__).resolve().parents[1] / "data" / "raw"
 
 
-def _predict_full(model: str, seed: int, use_original: bool) -> np.ndarray:
-    """Train ``model`` on all training data and return test probabilities."""
-    X, y = _load_training_data(seed, sample=None, use_original=use_original)
-    X_test = load_raw("test")[list(RAW_FEATURES)]
-
-    family = MODEL_FAMILY[model]
-    pre = build_preprocessor(family).fit(X, y)
-    X_model = pre.transform(X)
-    X_test_model = pre.transform(X_test)
-    estimator = build_estimator(model, seed)
-    return fit_predict_proba(model, estimator, X_model, y, X_test_model)
+def _load_test_probs(model: str) -> np.ndarray:
+    """Load bagged test probabilities for a model key or the blend."""
+    path = BLEND_TEST if model == "blend" else ARTIFACTS_DIR / f"{model}_test.npy"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path.name} not found. Run `python -m src.train` (and `src.blend` "
+            f"for the blend) before submitting."
+        )
+    return np.load(path)
 
 
-def make_submission(model: str = "blend", seed: int = 42, use_original: bool = False) -> Path:
-    """Build a submission for one model or the saved blend, write and validate it."""
+def make_submission(model: str = "blend") -> Path:
+    """Write a validated probability submission for a model key or the blend."""
+    proba = _load_test_probs(model)
     test_ids = load_raw("test")[ID_COLUMN].to_numpy()
+    if len(proba) != len(test_ids):
+        raise ValueError(f"prediction length {len(proba)} != test rows {len(test_ids)}")
 
-    if model == "blend":
-        if not WEIGHTS_JSON.exists():
-            raise FileNotFoundError("blend_weights.json not found; run `python -m src.blend` first.")
-        spec = json.loads(WEIGHTS_JSON.read_text())
-        members, weights = spec["models"], np.asarray(spec["weights"])
-        n = len(test_ids)
-        proba = np.zeros(n, dtype="float64")
-        for name, w in zip(members, weights):
-            if w <= 0:  # contributes nothing; skip the (expensive) refit
-                continue
-            preds = _predict_full(name, seed, use_original)
-            proba += w * (rankdata(preds) / n)  # rank-average to match the blender
-            print(f"  blended {name!r} (weight {w:.3f})")
-    else:
-        if model not in MODEL_FAMILY:
-            raise ValueError(f"Unknown model {model!r}; choose from {sorted(MODEL_FAMILY)} or 'blend'")
-        proba = _predict_full(model, seed, use_original)
-
-    submission = pd.DataFrame({ID_COLUMN: test_ids, TARGET_COLUMN: proba})
-    _validate(submission)
+    sample = pd.read_csv(RAW_DIR / "sample_submission.csv")
+    prob_col = [c for c in sample.columns if c != ID_COLUMN][0]
+    submission = pd.DataFrame({ID_COLUMN: test_ids, prob_col: proba})
+    _validate(submission, sample, prob_col)
 
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUTS_DIR / f"{model}_submission.csv"
     submission.to_csv(path, index=False)
     print(f"Wrote {path} ({len(submission):,} rows)")
-    print(
-        f"Probability summary: min={proba.min():.4f} mean={proba.mean():.4f} "
-        f"max={proba.max():.4f}"
-    )
+    print(f"Probability summary: min={proba.min():.4f} mean={proba.mean():.4f} max={proba.max():.4f}")
     return path
 
 
-def _validate(submission: pd.DataFrame) -> None:
+def _validate(submission: pd.DataFrame, sample: pd.DataFrame, prob_col: str) -> None:
     """Check the submission matches the sample submission's shape and schema."""
-    sample = pd.read_csv(RAW_DIR / "sample_submission.csv")
-    # Align the probability column name to whatever the sample uses.
-    prob_col = [c for c in sample.columns if c != ID_COLUMN][0]
-    if prob_col != TARGET_COLUMN:
-        submission.rename(columns={TARGET_COLUMN: prob_col}, inplace=True)
     if list(submission.columns) != list(sample.columns):
         raise ValueError(f"columns {list(submission.columns)} != {list(sample.columns)}")
     if len(submission) != len(sample):
@@ -111,16 +84,14 @@ def submit_to_kaggle(path: Path, message: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="blend", help="model name or 'blend'")
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--use-original", action="store_true", help="augment with CDC original data")
+    parser.add_argument("--model", default="blend", help="model key or 'blend'")
     parser.add_argument("--submit", action="store_true", help="upload via the Kaggle CLI")
     parser.add_argument("-m", "--message", default=None, help="submission message")
     args = parser.parse_args()
 
-    path = make_submission(model=args.model, seed=args.seed, use_original=args.use_original)
+    path = make_submission(model=args.model)
     if args.submit:
-        message = args.message or f"{args.model} probabilities (5-fold CV documented in README)"
+        message = args.message or f"{args.model} (diversity blend; see experiments/README.md)"
         submit_to_kaggle(path, message)
 
 

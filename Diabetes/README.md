@@ -37,17 +37,19 @@ Optional augmentation: place a schema-compatible external dataset at
 | `src/data.py` | Schema constants, CSV loading + schema check, train/test split, optional original-data loader |
 | `src/features.py` | `DiabetesFeatureEngineer` — ordinal encoding + clinical composites (lipid ratios, blood-pressure summaries, metabolic risk, activity balance). Row-wise, no leakage |
 | `src/preprocessing.py` | `build_preprocessor("tree"\|"linear")` — one-hot nominal categoricals; `linear` also `StandardScaler`s the rest |
-| `src/train.py` | 5-fold `StratifiedKFold` CV; predicts **probabilities**, scores ROC-AUC; saves OOF arrays |
-| `src/blend.py` | Rank-average OOF blend; SLSQP weight search maximising blended AUC |
-| `src/submit.py` | Refit on full train, predict test probabilities (single model or blend), validate, optionally upload |
+| `src/train.py` | 5-fold `StratifiedKFold` CV; regularised configs; predicts **probabilities** (ROC-AUC); saves OOF + **bagged test** predictions. `--use-original` adds the source dataset to each *training* fold only |
+| `src/blend.py` | Equal-weight **rank-average diversity blend** over base + augmented GBMs (the winning recipe; see `experiments/README.md`) |
+| `src/submit.py` | Build a validated probability submission from saved bagged predictions (single model or blend), optionally upload |
 
 ## Usage
 
 ```bash
 python -m pytest                                  # unit tests
 python -m src.train --model lgbm --sample 50000   # quick smoke run
-python -m src.train --model all --folds 5         # full CV for every model
-python -m src.blend                               # find blend weights
+# winning recipe: base + original-augmented pools, then the diversity blend
+python -m src.train --model all --folds 5         # base pool
+python -m src.train --model all --folds 5 --use-original   # augmented pool
+python -m src.blend                               # equal-weight rank-average blend
 python -m src.submit --model blend                # write outputs/blend_submission.csv
 python -m src.submit --model blend --submit -m "…"  # upload via Kaggle CLI
 ```
@@ -58,7 +60,12 @@ re-weighting.
 
 ## Results
 
-See `experiments/README.md` for the running log of per-model OOF AUC and the blend.
+Best leaderboard: **public 0.69814 / private 0.69477** (diversity blend of base +
+original-augmented regularised GBMs); top of the leaderboard is 0.70504. The
+**original-data concat** was the decisive lever. Key learning: local CV does
+**not** predict this leaderboard (a ~0.03 gap from concept shift / intrinsic test
+difficulty), so model selection here is driven by leaderboard feedback, not OOF.
+See `experiments/README.md` for the full run history and findings.
 
 ## EDA
 

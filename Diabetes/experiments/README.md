@@ -59,3 +59,15 @@ Data: 700k train rows, target `diagnosed_diabetes` (~62% positive). 15 numeric +
   with the GBM blend (no help). MLP OOF ~0.695 and logreg ~0.695 are the only
   **decorrelated** models (~0.91 corr) but individually weak, so they lower the
   blended OOF. Only a *small* weight on a decorrelated model carries new signal.
+- 2026-06-23 — **Stopped at best public 0.69814 / private 0.69477** (diversity
+  blend; top of LB 0.70504). Plateau confirmed: feature set + tree models cap out
+  near 0.698; the remaining gap needs the full 1st-place recipe (more diverse
+  model classes + hill-climbing over many models). Productionized the winning
+  recipe into `src/`: regularised configs, leakage-safe `--use-original`
+  augmentation, bagged test predictions, equal-weight rank-average blend.
+
+## Final state
+- Best submission: equal-weight rank-average of regularised GBMs (lgbm/lgbm2/xgb/
+  histgb) across base + original-augmented pools.
+- Reproduce: `train --model all` (+ `--use-original`) → `blend` → `submit --model blend`.
+- Biggest lever: concatenating the source dataset into each training fold.

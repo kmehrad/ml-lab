@@ -1,19 +1,20 @@
-"""Out-of-fold probability blending for the Diabetes challenge.
+"""Diversity blend over saved out-of-fold + bagged-test predictions.
 
-Each model in ``src.train`` saves its out-of-fold positive-class probabilities to
-``experiments/artifacts/{model}_oof.npy`` and the shared label vector to
-``y_true.npy``. This module loads those, searches for non-negative weights that
-maximize the blended out-of-fold ROC-AUC, and persists the chosen weights so
-``src.submit`` can apply the same blend to the test predictions.
+Each ``src.train`` run saves ``{key}_oof.npy`` and ``{key}_test.npy`` (``key`` is
+the model name, plus an ``_aug`` suffix for original-augmented runs). The winning
+leaderboard recipe (see ``experiments/README.md``) is an **equal-weight
+rank-average** of the regularised GBMs across the base and augmented pools —
+local OOF is *not* predictive of the leaderboard, and an equal-weight diverse
+blend generalised better than any OOF-optimal weighting.
 
-Because AUC depends only on the ranking, blending is done on the *rank* of each
-model's probabilities (rank-averaging), which is robust to differing probability
-calibration across libraries. Weights are optimised with SLSQP on the simplex.
+This module rank-averages the selected members' OOF (for a sanity AUC) and their
+bagged test predictions, then saves the blended test prediction (``blend_test.npy``)
+and the member list (``blend_weights.json``) for :mod:`src.submit`.
 
 Usage
 -----
-    python -m src.blend                       # blend all available OOF arrays
-    python -m src.blend --models lgbm xgb catboost
+    python -m src.blend                                   # default GBM pool
+    python -m src.blend --members lgbm lgbm2 xgb histgb lgbm_aug lgbm2_aug
 """
 
 from __future__ import annotations
@@ -23,86 +24,80 @@ import json
 from pathlib import Path
 
 import numpy as np
-from scipy.optimize import minimize
-from sklearn.metrics import roc_auc_score
 from scipy.stats import rankdata
+from sklearn.metrics import roc_auc_score
 
 ARTIFACTS_DIR = Path(__file__).resolve().parents[1] / "experiments" / "artifacts"
 WEIGHTS_JSON = ARTIFACTS_DIR / "blend_weights.json"
+BLEND_TEST = ARTIFACTS_DIR / "blend_test.npy"
+
+# The winning pool: regularised GBMs, base and original-augmented.
+DEFAULT_MEMBERS = (
+    "lgbm", "lgbm2", "xgb", "histgb",
+    "lgbm_aug", "lgbm2_aug", "xgb_aug", "histgb_aug",
+)
 
 
-def _load_oof(models: list[str]) -> tuple[list[str], np.ndarray, np.ndarray]:
-    """Return ``(names, ranks_matrix, y_true)`` for models with saved OOF arrays."""
+def _available(members: list[str]) -> list[str]:
+    """Keep members that have both OOF and test arrays saved."""
+    keep = []
+    for m in members:
+        if (ARTIFACTS_DIR / f"{m}_oof.npy").exists() and (ARTIFACTS_DIR / f"{m}_test.npy").exists():
+            keep.append(m)
+        else:
+            print(f"  skipping {m!r}: predictions not found")
+    return keep
+
+
+def find_blend(members: list[str]) -> dict:
+    """Equal-weight rank-average blend; report OOF AUC, save test blend + members."""
+    members = _available(members)
+    if not members:
+        raise RuntimeError("No usable predictions found; run src.train first.")
     y = np.load(ARTIFACTS_DIR / "y_true.npy")
-    names, cols = [], []
-    for name in models:
-        path = ARTIFACTS_DIR / f"{name}_oof.npy"
-        if not path.exists():
-            print(f"  skipping {name!r}: {path.name} not found")
-            continue
-        oof = np.load(path)
+    n_test = len(np.load(ARTIFACTS_DIR / f"{members[0]}_test.npy"))
+
+    singles, oof_ranks, test_ranks = {}, [], []
+    for m in members:
+        oof = np.load(ARTIFACTS_DIR / f"{m}_oof.npy")
         if np.isnan(oof).any():
-            print(f"  skipping {name!r}: OOF contains NaN (incomplete CV)")
+            print(f"  skipping {m!r}: OOF has NaN (incomplete CV)")
             continue
-        names.append(name)
-        cols.append(rankdata(oof) / len(oof))  # normalised ranks in (0, 1]
-    if not names:
-        raise RuntimeError("No usable OOF arrays found; run src.train first.")
-    return names, np.column_stack(cols), y
+        singles[m] = round(float(roc_auc_score(y, oof)), 5)
+        oof_ranks.append(rankdata(oof) / len(oof))
+        test_ranks.append(rankdata(np.load(ARTIFACTS_DIR / f"{m}_test.npy")) / n_test)
 
-
-def find_blend(models: list[str]) -> dict:
-    """Search simplex weights that maximise blended OOF AUC; persist and return."""
-    names, ranks, y = _load_oof(models)
-    n = len(names)
-    singles = {nm: round(float(roc_auc_score(y, ranks[:, i])), 5) for i, nm in enumerate(names)}
-
-    def neg_auc(w: np.ndarray) -> float:
-        return -roc_auc_score(y, ranks @ w)
-
-    best = None
-    # Multi-start (equal weights + each model dominant) to avoid local optima.
-    starts = [np.full(n, 1.0 / n)] + list(np.eye(n))
-    constraints = {"type": "eq", "fun": lambda w: w.sum() - 1.0}
-    bounds = [(0.0, 1.0)] * n
-    for x0 in starts:
-        res = minimize(neg_auc, x0, method="SLSQP", bounds=bounds, constraints=constraints)
-        if best is None or res.fun < best.fun:
-            best = res
-
-    weights = np.clip(best.x, 0.0, None)
-    weights = weights / weights.sum()
-    blended_auc = round(float(roc_auc_score(y, ranks @ weights)), 5)
+    used = list(singles)
+    oof_blend = np.mean(oof_ranks, axis=0)
+    test_blend = np.mean(test_ranks, axis=0)
+    blended_auc = round(float(roc_auc_score(y, oof_blend)), 5)
 
     result = {
-        "models": names,
-        "weights": [round(float(w), 4) for w in weights],
-        "rank_average": True,
+        "members": used,
+        "weights": "equal rank-average",
         "single_auc": singles,
         "blended_auc": blended_auc,
         "best_single_auc": max(singles.values()),
     }
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     WEIGHTS_JSON.write_text(json.dumps(result, indent=2))
+    np.save(BLEND_TEST, test_blend)
 
-    print("Single-model OOF AUC (rank-scaled):")
-    for nm in names:
-        print(f"  {nm:>9}: {singles[nm]:.5f}")
-    print("Blend weights:")
-    for nm, w in zip(names, weights):
-        print(f"  {nm:>9}: {w:.4f}")
+    print(f"Blend of {len(used)} members (equal rank-average):")
+    for m in used:
+        print(f"  {m:>12}: {singles[m]:.5f}")
     print(f"Blended OOF AUC: {blended_auc:.5f}  (best single {result['best_single_auc']:.5f})")
+    print("NOTE: OOF is not predictive of the leaderboard; the equal-weight diverse "
+          "blend generalised best. See experiments/README.md.")
     return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--models", nargs="+", default=["lgbm", "xgb", "catboost", "histgb", "baseline"],
-        help="candidate models to blend (uses those with saved OOF arrays)",
-    )
+    parser.add_argument("--members", nargs="+", default=list(DEFAULT_MEMBERS),
+                        help="prediction keys to blend (need saved *_oof and *_test)")
     args = parser.parse_args()
-    find_blend(args.models)
+    find_blend(args.members)
 
 
 if __name__ == "__main__":

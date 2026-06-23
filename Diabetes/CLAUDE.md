@@ -35,10 +35,17 @@ OOF arrays + results in `experiments/artifacts/`; submissions in `outputs/`.
 ## Workflow
 1. `python -m pytest`
 2. `python -m src.train --model lgbm --sample 50000` (smoke)
-3. `python -m src.train --model all --folds 5`
-4. `python -m src.blend`
-5. `python -m src.submit --model blend [--submit -m "..."]`
+3. `python -m src.train --model all --folds 5` (base pool)
+4. `python -m src.train --model all --folds 5 --use-original` (augmented pool)
+5. `python -m src.blend` (equal-weight rank-average diversity blend)
+6. `python -m src.submit --model blend [--submit -m "..."]`
+
+`train` saves `{key}_oof.npy` + `{key}_test.npy` (bagged test preds) per model;
+`_aug` suffix for `--use-original` runs. `submit` reads the saved bagged preds
+(no refit). Original data is added to **training folds only** (leakage-safe OOF).
 
 ## Discipline
-Only commit/submit a change if OOF AUC improves above noise (compare
-`auc_fold_std` between runs). Log every meaningful run in `experiments/README.md`.
+**Local CV does not predict this leaderboard** (concept shift; ~0.03 gap). Do not
+chase OOF — the equal-weight diverse blend (incl. original-augmented models)
+generalised best. Get explicit approval before each Kaggle submission and log
+every run in `experiments/README.md`. The original-data concat was the main lever.
