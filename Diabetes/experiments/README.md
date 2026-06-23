@@ -82,3 +82,14 @@ Data: 700k train rows, target `diagnosed_diabetes` (~62% positive). 15 numeric +
 - Biggest lever: concatenating the source dataset into each training fold.
 - **Do NOT stack/hill-climb to OOF here** — it overfits the concept shift and
   lowers the LB (proven: stacker 0.72741 OOF → 0.69751 LB, below the 0.69814 blend).
+
+## Status / next
+- 2026-06-23 — **Daily submission limit reached (5/5).** No further LB tests
+  possible until the 00:00 UTC reset. Best stands at 0.69814 public.
+- **Queued next candidate (untested):** fixed-weight cross-class diversity blend
+  `0.70*GBM + 0.15*DART + 0.08*MLP + 0.07*logreg` (shift-robust, NOT OOF-fit) —
+  the one principled lever not yet submitted. Test first after reset.
+- Further ideas if that stalls: more decorrelated base models (extra NN seeds,
+  RandomForest/ExtraTrees) for the equal-weight blend; upweighting original data
+  toward the test distribution; pseudo-labeling. All carry real uncertainty given
+  local CV is non-predictive; ~0.698 may be the practical ceiling for this feature set.
