@@ -66,8 +66,19 @@ Data: 700k train rows, target `diagnosed_diabetes` (~62% positive). 15 numeric +
   recipe into `src/`: regularised configs, leakage-safe `--use-original`
   augmentation, bagged test predictions, equal-weight rank-average blend.
 
+- 2026-06-23 — **Logistic/Ridge stacker** over the full 24-prediction pool
+  (base+aug+TE+DART+MLP): meta-OOF **0.72741** (+0.005 over equal-weight blend,
+  the highest OOF seen). **Public LB 0.69751 / private 0.69445 — WORSE than the
+  0.69814 equal-weight blend.** Decisive confirmation: any OOF-optimised weighting
+  (stacking / hill-climbing) overfits the train distribution and loses on the
+  shifted test set. Equal-weight diverse blending is the robust ceiling here.
+
 ## Final state
-- Best submission: equal-weight rank-average of regularised GBMs (lgbm/lgbm2/xgb/
-  histgb) across base + original-augmented pools.
+- **Best submission: 0.69814 public / 0.69477 private** — equal-weight
+  rank-average of regularised GBMs (lgbm/lgbm2/xgb/histgb) across base +
+  original-augmented pools (`blend_diversity`). Goal of 0.70 not reached
+  (top of LB 0.70504).
 - Reproduce: `train --model all` (+ `--use-original`) → `blend` → `submit --model blend`.
 - Biggest lever: concatenating the source dataset into each training fold.
+- **Do NOT stack/hill-climb to OOF here** — it overfits the concept shift and
+  lowers the LB (proven: stacker 0.72741 OOF → 0.69751 LB, below the 0.69814 blend).
