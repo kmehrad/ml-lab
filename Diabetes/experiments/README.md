@@ -55,3 +55,7 @@ Data: 700k train rows, target `diagnosed_diabetes` (~62% positive). 15 numeric +
   captured) → no decorrelation. 16-set blend (base+aug+TE+TE-aug GBMs):
   **Public LB 0.69814 / private 0.69477** — flat. **GBM blending has plateaued**
   (all models 0.995+ corr). Next lever = decorrelated model *classes* (DART, MLP).
+- 2026-06-23 — Diverse classes: DART-LGBM OOF ~0.7248 but still **0.995 corr**
+  with the GBM blend (no help). MLP OOF ~0.695 and logreg ~0.695 are the only
+  **decorrelated** models (~0.91 corr) but individually weak, so they lower the
+  blended OOF. Only a *small* weight on a decorrelated model carries new signal.
