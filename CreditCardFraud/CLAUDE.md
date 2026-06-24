@@ -47,8 +47,11 @@ without refitting.
   `{key}_test.npy` (hold-out). `--imbalance` reweights (`classweight`) or resamples
   (`undersample`/`smote`) **training folds only**; the strategy is encoded in the
   key (e.g. `lgbm_cw`). `y_oof.npy`/`y_test.npy` saved from the base `none` run.
-- `src/anomaly.py` — Isolation Forest / LOF (`novelty=True`) fit on the remainder,
-  scored on the hold-out; saved as `{name}_test.npy`. Reuses `train._record_results`.
+- `src/anomaly.py` — six unsupervised detectors (`iforest`, `lof`, `ocsvm` =
+  SGDOneClassSVM on a Nystroem RBF, `elliptic`, `gmm`, `pca` = reconstruction error)
+  fit on the remainder, scored on the hold-out; saved as `{name}_test.npy`. Each
+  exposes `score_samples` (higher == more normal; `run_detector` negates it). Reuses
+  `train._record_results`.
 - `src/ensemble.py` — equal-weight **rank-average** over members' OOF + test arrays.
 - `src/evaluate.py` — final hold-out report: AUPRC/ROC-AUC + operating threshold
   picked on **OOF** (never the test set) via `max-f1` or `precision-floor`; writes
@@ -62,8 +65,10 @@ Git-ignored: `data/`, `models/`, `outputs/`, `experiments/artifacts/`, `reports/
 - Supervised GBMs dominate; **CatBoost is the best single model** and the
   rank-average blend does **not** beat it (GBMs rank-correlate highly). Logreg drags
   blends down — exclude it.
-- Unsupervised anomaly detection (IsolationForest/LOF) is a **weak baseline** here
-  (AUPRC 0.16 / ≈random) — kept only for contrast, not as a contender.
+- Unsupervised anomaly detection is a **weak baseline** here — best is GaussianMixture
+  density (AUPRC 0.36), then OCSVM 0.22; all are far below the GBMs. A single-mode
+  Gaussian (EllipticEnvelope 0.06) underperforms the 8-component GMM, i.e. the normal
+  manifold is multimodal. Kept for contrast, not as contenders.
 - Resampling/weighting must touch **training folds only**; report it on AUPRC.
 - Threshold is chosen on **OOF**, then applied to the hold-out, to avoid optimistic
   selection. Per user prefs: show CV/OOF metrics and get approval before declaring a

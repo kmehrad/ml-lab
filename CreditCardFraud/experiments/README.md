@@ -26,10 +26,14 @@ a change if its OOF AUPRC beats the current best by more than `oof_ap_fold_std`
 
 ### Unsupervised baselines (no OOF; hold-out only)
 
-| Model | Hold-out AUPRC | Hold-out ROC-AUC | Notes |
-|-------|---------------:|-----------------:|-------|
-| IsolationForest | 0.16258 | 0.95444 | contamination = train positive rate |
-| LocalOutlierFactor | 0.00351 | 0.51398 | ≈ random; struggles on 30-d PCA space |
+| Model | Hold-out AUPRC | Hold-out ROC-AUC | secs | Notes |
+|-------|---------------:|-----------------:|-----:|-------|
+| GaussianMixture (8, full) | **0.35946** | 0.93933 | 24 | best unsupervised; density of a multimodal normal manifold |
+| SGD-One-Class SVM (Nystroem RBF) | 0.22075 | 0.94492 | 1 | scalable OCSVM; signed distance to boundary |
+| PCA reconstruction (15 comp) | 0.18445 | 0.95786 | 0 | squared reconstruction error |
+| IsolationForest | 0.16258 | 0.95444 | 2 | contamination = train positive rate |
+| EllipticEnvelope (robust Gaussian) | 0.06047 | 0.92903 | 8 | single-mode MCD; normal data is *not* one ellipse |
+| LocalOutlierFactor | 0.00351 | 0.51398 | 17 | ≈ random; struggles in 30-d PCA space |
 
 **Findings:**
 - **CatBoost is the best single model** (OOF AUPRC 0.851). The four GBMs cluster
@@ -41,9 +45,14 @@ a change if its OOF AUPRC beats the current best by more than `oof_ap_fold_std`
   HistGB (0.824 → 0.745), and hurts logreg. AUPRC is rank-based, so reweighting mainly
   moves the decision threshold and distorts the leaf/split statistics rather than
   improving ranking → **handle imbalance at the threshold, not by reweighting.**
-- **Unsupervised anomaly detection is far behind** the supervised models (IForest
-  0.16, LOF ≈ random), confirming the PCA features carry label-aligned signal that
-  supervised GBMs exploit. Kept for contrast only.
+- **Unsupervised anomaly detection is far behind** the supervised models. Among the
+  six detectors, **GaussianMixture density is best (0.359)** — well above IForest
+  (0.163) but still less than half of CatBoost's 0.851. The ordering is informative:
+  a single-mode robust Gaussian (EllipticEnvelope, 0.060) does *worse* than an
+  8-component mixture, so the genuine-transaction manifold is **multimodal**, not one
+  ellipse; LOF is ≈ random in this 30-d space. The PCA features carry label-aligned
+  signal that only the supervised GBMs fully exploit, so unsupervised methods are
+  kept for contrast, not as contenders.
 
 ## Operating points (CatBoost, threshold chosen on OOF)
 - `max-f1` → thr 0.535: **P 0.96 / R 0.79 / F1 0.865**, catches 77/98 frauds, 3 FP.
@@ -60,12 +69,16 @@ a change if its OOF AUPRC beats the current best by more than `oof_ap_fold_std`
 - `outputs/{model}_eval.json`, `reports/figures/{model}_pr_curve.png` — final report.
 
 ## Run history
-- 2026-06-23 — `src.train --model all` (base) + `--imbalance classweight`; `src.anomaly
-  --model all`; `src.ensemble` (5-member and GBM-only). Best: CatBoost OOF AUPRC
-  0.85128 / hold-out 0.87734. Blend and class weighting gave no OOF lift.
+- 2026-06-23 — `src.train --model all` (base) + `--imbalance classweight`; `src.ensemble`
+  (5-member and GBM-only). Best: CatBoost OOF AUPRC 0.85128 / hold-out 0.87734. Blend
+  and class weighting gave no OOF lift.
+- 2026-06-24 — Added four detectors to `src.anomaly` (`ocsvm`, `elliptic`, `gmm`,
+  `pca`) alongside `iforest`/`lof`. GaussianMixture best unsupervised at hold-out
+  AUPRC 0.359; full sweep in the table above.
 
 ## Next ideas (untested)
 - `undersample` / `smote` sweeps (training-fold only) — expected similar AUPRC story.
 - Light hyper-parameter tuning of CatBoost/LightGBM on OOF AUPRC.
-- A small autoencoder reconstruction-error baseline to round out the anomaly angle.
+- An **autoencoder** reconstruction-error baseline (adds a torch dep) — the next
+  anomaly-detector to try; GMM density is the bar to beat (0.359).
 - Seed-bagging CatBoost for a small variance reduction.

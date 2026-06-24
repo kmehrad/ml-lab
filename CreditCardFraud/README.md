@@ -32,7 +32,7 @@ verified on load. The hold-out row indices are cached once to
 | `src/features.py` | `FraudFeatureEngineer` — stateless `log1p(Amount)`, `amount_zero`, `hour`; `V1`–`V28` pass through |
 | `src/preprocessing.py` | `build_preprocessor("tree"\|"linear")` — `linear` adds `RobustScaler` on raw-scale columns |
 | `src/train.py` | 5-fold CV on the remainder; AUPRC primary; `--imbalance {none,classweight,undersample,smote}` (training-fold only); saves OOF + bagged hold-out preds |
-| `src/anomaly.py` | Unsupervised baselines (Isolation Forest, LOF) scored on the same hold-out AUPRC |
+| `src/anomaly.py` | Unsupervised baselines (Isolation Forest, LOF, One-Class SVM, Elliptic Envelope, Gaussian Mixture, PCA reconstruction) scored on the same hold-out AUPRC |
 | `src/ensemble.py` | Rank-average blend over saved OOF/test arrays |
 | `src/evaluate.py` | Final hold-out report: AUPRC/ROC-AUC + operating threshold (max-F1 or precision-floor) + PR curve |
 
@@ -43,7 +43,7 @@ python -m pytest                                   # unit tests
 python -m src.train --model lgbm --sample 30000    # quick smoke run
 python -m src.train --model all                    # base pool: OOF + bagged hold-out preds
 python -m src.train --model all --imbalance classweight   # cost-reweighted variant
-python -m src.anomaly --model all                  # Isolation Forest + LOF baselines
+python -m src.anomaly --model all                  # 6 unsupervised baselines (iforest/lof/ocsvm/elliptic/gmm/pca)
 python -m src.ensemble --members lgbm xgb catboost histgb # rank-average blend
 python -m src.evaluate --model catboost --policy max-f1    # final hold-out report + threshold
 python -m src.evaluate --model catboost --policy precision-floor --min-precision 0.9
@@ -58,9 +58,10 @@ Best model: **CatBoost** — hold-out **AUPRC 0.877 / ROC-AUC 0.982** (OOF AUPRC
 positives** (P 0.96 / R 0.79); a precision-floor of 0.9 trades to **83/98 caught**
 (P 0.88 / R 0.85). The GBMs (LightGBM, XGBoost, HistGB) cluster within noise; an
 equal-weight blend does **not** beat CatBoost alone (models rank-correlate highly).
-Unsupervised baselines are far weaker — Isolation Forest AUPRC 0.16, LOF ≈ random
-— confirming the labels carry signal the supervised models exploit. See
-`experiments/README.md` for the full run history.
+Unsupervised baselines are far weaker — best is Gaussian-Mixture density at AUPRC
+**0.36** (then One-Class SVM 0.22, PCA-recon 0.18, Isolation Forest 0.16, Elliptic
+0.06, LOF ≈ random) — confirming the labels carry signal the supervised models
+exploit. See `experiments/README.md` for the full run history.
 
 ## EDA
 
