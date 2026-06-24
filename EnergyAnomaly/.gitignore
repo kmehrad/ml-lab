@@ -1,0 +1,23 @@
+# data & artifacts (never commit raw competition data)
+data/raw/*
+data/processed/*
+!**/.gitkeep
+models/*
+!models/.gitkeep
+outputs/*
+!outputs/.gitkeep
+experiments/artifacts/*
+!experiments/artifacts/.gitkeep
+reports/figures/*
+!reports/figures/.gitkeep
+
+# python / uv
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# credentials
+*.kaggle
+kaggle.json
+access_token
