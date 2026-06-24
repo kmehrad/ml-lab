@@ -18,6 +18,7 @@ from sklearn.metrics import roc_auc_score
 from . import data as D
 from .cv import folds
 from .features import add_features, feature_columns
+from .target_encoding import TargetEncoder, te_columns
 
 ART = Path(__file__).resolve().parent.parent / "experiments" / "artifacts"
 
@@ -34,12 +35,13 @@ def build_estimator(model: str):
     raise ValueError(f"unknown model {model}")
 
 
-def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
+def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
+           target_encode: bool = False) -> dict:
     df = D.load_train()
     if sample:
         keep = df[D.GROUP].drop_duplicates().head(sample)
         df = df[df[D.GROUP].isin(keep)].reset_index(drop=True)
-    print(f"train rows={len(df):,} buildings={df[D.GROUP].nunique()}")
+    print(f"train rows={len(df):,} buildings={df[D.GROUP].nunique()}  target_encode={target_encode}")
 
     df = add_features(df)
     feats = feature_columns()
@@ -58,18 +60,27 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
     fold_aucs = []
     t0 = time.time()
     for k, (tr, va) in enumerate(folds(groups, n_splits)):
+        # Per-fold target encoding: fit on training rows only, transform valid + test.
+        Xtr, Xva, Xte_k = X.iloc[tr], X.iloc[va], Xte
+        if target_encode:
+            te = TargetEncoder().fit(df.iloc[tr], y[tr])
+            Xtr = pd.concat([Xtr, te.transform(df.iloc[tr])], axis=1)
+            Xva = pd.concat([Xva, te.transform(df.iloc[va])], axis=1)
+            if Xte is not None:
+                Xte_k = pd.concat([Xte, te.transform(test)], axis=1)
+
         est = build_estimator(model)
         if model == "lgbm":
             import lightgbm as lgb
             est.fit(
-                X.iloc[tr], y[tr],
-                eval_set=[(X.iloc[va], y[va])], eval_metric="auc",
+                Xtr, y[tr],
+                eval_set=[(Xva, y[va])], eval_metric="auc",
                 categorical_feature=cats,
                 callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)],
             )
-            oof[va] = est.predict_proba(X.iloc[va])[:, 1]
+            oof[va] = est.predict_proba(Xva)[:, 1]
             if Xte is not None:
-                test_pred += est.predict_proba(Xte)[:, 1] / n_splits
+                test_pred += est.predict_proba(Xte_k)[:, 1] / n_splits
         auc = roc_auc_score(y[va], oof[va])
         fold_aucs.append(auc)
         print(f"  fold {k}: AUC={auc:.5f}  (best_iter={getattr(est,'best_iteration_', '-')})")
@@ -79,7 +90,8 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
         "model": model, "oof_auc": float(oof_auc),
         "fold_mean": float(np.mean(fold_aucs)), "fold_std": float(np.std(fold_aucs)),
         "fold_aucs": [float(a) for a in fold_aucs], "n_rows": int(len(df)),
-        "n_features": len(feats), "elapsed_s": round(time.time() - t0, 1),
+        "n_features": len(feats) + (len(te_columns()) if target_encode else 0),
+        "target_encode": target_encode, "elapsed_s": round(time.time() - t0, 1),
     }
     print(f"\nOOF AUC = {oof_auc:.5f}   folds {res['fold_mean']:.5f} +/- {res['fold_std']:.5f}"
           f"   ({res['elapsed_s']}s)")
@@ -100,5 +112,6 @@ if __name__ == "__main__":
     p.add_argument("--model", default="lgbm")
     p.add_argument("--sample", type=int, default=None, help="limit to N buildings (smoke test)")
     p.add_argument("--folds", type=int, default=5)
+    p.add_argument("--target-encode", action="store_true", help="enable in-fold target encoding (hurt OOF; off by default)")
     a = p.parse_args()
-    run_cv(a.model, a.sample, a.folds)
+    run_cv(a.model, a.sample, a.folds, target_encode=a.target_encode)

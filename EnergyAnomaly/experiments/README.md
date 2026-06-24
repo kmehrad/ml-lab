@@ -6,6 +6,7 @@ Submit only after CV review + approval.
 | ID | Date | Model | OOF AUC | Public LB | Private LB | Fold mean ± std | Notes |
 |----|------|-------|--------:|----------:|-----------:|-----------------|-------|
 | exp-001 | 2026-06-24 | LightGBM | 0.96091 | 0.95870 | 0.97031 | 0.96267 ± 0.01151 | Baseline. Built on `*_features.csv` (gte_* dropped — leakage). Engineered: flatline run-length, is_reading_one/zero/missing, per-building lag/diff (1/24/168h), roll24 z-score, sin/cos wind, cloud_coverage 255→NaN. 2000 trees lr 0.03, early stop. |
+| exp-002 | 2026-06-24 | LightGBM + in-fold TE | 0.95521 | — | — | 0.95825 ± 0.00867 | **Rejected (worse −0.0057).** In-fold smoothed target encoding on cross-building groupings (primary_use/site_id/hour/weekday/month + interactions; building_id excluded as non-generalizable). TE adds fold-variance noise over signal LGBM already gets natively. Disabled by default (`--target-encode` flag). Not submitted. |
 
 ## Notes
 - High per-fold variance (±0.012) reflects building heterogeneity — expected with grouped CV.
