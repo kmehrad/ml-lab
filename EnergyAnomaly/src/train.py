@@ -46,6 +46,14 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
     cats = [c for c in D.CATEGORICAL if c in feats]
     X, y, groups = df[feats], df[D.TARGET].to_numpy(), df[D.GROUP].to_numpy()
 
+    # Test set (fold-bagged predictions). Skipped for smoke tests.
+    Xte = row_id = None
+    if not sample:
+        test = add_features(D.load_test())
+        row_id = test["row_id"].to_numpy()
+        Xte = test[feats]
+        test_pred = np.zeros(len(test))
+
     oof = np.zeros(len(df))
     fold_aucs = []
     t0 = time.time()
@@ -60,6 +68,8 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
                 callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)],
             )
             oof[va] = est.predict_proba(X.iloc[va])[:, 1]
+            if Xte is not None:
+                test_pred += est.predict_proba(Xte)[:, 1] / n_splits
         auc = roc_auc_score(y[va], oof[va])
         fold_aucs.append(auc)
         print(f"  fold {k}: AUC={auc:.5f}  (best_iter={getattr(est,'best_iteration_', '-')})")
@@ -78,8 +88,10 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
         ART.mkdir(parents=True, exist_ok=True)
         np.save(ART / f"{model}_oof.npy", oof)
         np.save(ART / "y.npy", y)
+        np.save(ART / f"{model}_test.npy", test_pred)
+        np.save(ART / "test_row_id.npy", row_id)
         (ART / f"{model}_metrics.json").write_text(json.dumps(res, indent=2))
-        print(f"saved -> {ART}/{model}_oof.npy, {model}_metrics.json")
+        print(f"saved -> {ART}/{model}_oof.npy, {model}_test.npy, {model}_metrics.json")
     return res
 
 
