@@ -23,3 +23,4 @@ Submit only after CV review + approval.
   OOF gains skeptically; building heterogeneity makes ~0.002 differences leaderboard-noise.
 - Next: weather ablation; stronger/diverse features (series-endpoint flags, longer lags); per-model
   tuning; optional GPU DL track for genuinely uncorrelated diversity.
+

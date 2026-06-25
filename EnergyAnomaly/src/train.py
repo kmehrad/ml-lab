@@ -20,6 +20,7 @@ from .cv import folds
 from .features import add_features, feature_columns
 from .target_encoding import TargetEncoder, te_columns
 
+
 ART = Path(__file__).resolve().parent.parent / "experiments" / "artifacts"
 
 
@@ -83,11 +84,13 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte_k, cats):
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            target_encode: bool = False) -> dict:
+
     df = D.load_train()
     if sample:
         keep = df[D.GROUP].drop_duplicates().head(sample)
         df = df[df[D.GROUP].isin(keep)].reset_index(drop=True)
     print(f"train rows={len(df):,} buildings={df[D.GROUP].nunique()}  target_encode={target_encode}")
+
 
     df = add_features(df)
     feats = feature_columns()
@@ -105,11 +108,13 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
             dtype = pd.CategoricalDtype(categories=levels)
             df[c] = df[c].astype("object").astype(dtype)
             test[c] = test[c].astype("object").astype(dtype)
+
         row_id = test["row_id"].to_numpy()
         Xte = test[feats]
         test_pred = np.zeros(len(test))
 
     X, y, groups = df[feats], df[D.TARGET].to_numpy(), df[D.GROUP].to_numpy()
+
 
     oof = np.zeros(len(df))
     fold_aucs = []
@@ -132,6 +137,7 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
         auc = roc_auc_score(y[va], oof[va])
         fold_aucs.append(auc)
         print(f"  fold {k}: AUC={auc:.5f}  (best_iter={bi})")
+
 
     oof_auc = roc_auc_score(y, oof)
     res = {
@@ -163,3 +169,4 @@ if __name__ == "__main__":
     p.add_argument("--target-encode", action="store_true", help="enable in-fold target encoding (hurt OOF; off by default)")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, target_encode=a.target_encode)
+
