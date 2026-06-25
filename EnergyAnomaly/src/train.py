@@ -32,7 +32,53 @@ def build_estimator(model: str):
             reg_lambda=1.0, min_child_samples=100, n_jobs=-1, random_state=42,
             objective="binary", verbose=-1,
         )
+    if model == "xgb":
+        import xgboost as xgb
+        return xgb.XGBClassifier(
+            n_estimators=2000, learning_rate=0.03, max_depth=8,
+            subsample=0.8, colsample_bytree=0.8, reg_lambda=1.0, min_child_weight=5,
+            tree_method="hist", enable_categorical=True, eval_metric="auc",
+            early_stopping_rounds=100, n_jobs=-1, random_state=42,
+        )
+    if model == "cat":
+        from catboost import CatBoostClassifier
+        return CatBoostClassifier(
+            iterations=2000, learning_rate=0.03, depth=8, l2_leaf_reg=3.0,
+            eval_metric="AUC", early_stopping_rounds=100, random_seed=42,
+            thread_count=-1, verbose=False,
+        )
+    if model == "histgb":
+        from sklearn.ensemble import HistGradientBoostingClassifier
+        return HistGradientBoostingClassifier(
+            max_iter=2000, learning_rate=0.03, max_leaf_nodes=127, l2_regularization=1.0,
+            min_samples_leaf=100, categorical_features="from_dtype",
+            early_stopping=True, validation_fraction=0.1, n_iter_no_change=50, random_state=42,
+        )
     raise ValueError(f"unknown model {model}")
+
+
+def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte_k, cats):
+    """Fit with model-specific early stopping; return (oof_va, test_pred_or_None, best_iter)."""
+    if model == "lgbm":
+        import lightgbm as lgb
+        est.fit(Xtr, ytr, eval_set=[(Xva, yva)], eval_metric="auc",
+                categorical_feature=cats,
+                callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)])
+        bi = est.best_iteration_
+    elif model == "xgb":
+        est.fit(Xtr, ytr, eval_set=[(Xva, yva)], verbose=False)
+        bi = est.best_iteration
+    elif model == "cat":
+        est.fit(Xtr, ytr, eval_set=(Xva, yva), cat_features=cats, verbose=False)
+        bi = est.get_best_iteration()
+    elif model == "histgb":
+        est.fit(Xtr, ytr)
+        bi = est.n_iter_
+    else:
+        raise ValueError(model)
+    va_pred = est.predict_proba(Xva)[:, 1]
+    te_pred = est.predict_proba(Xte_k)[:, 1] if Xte_k is not None else None
+    return va_pred, te_pred, bi
 
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
@@ -46,15 +92,24 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     df = add_features(df)
     feats = feature_columns()
     cats = [c for c in D.CATEGORICAL if c in feats]
-    X, y, groups = df[feats], df[D.TARGET].to_numpy(), df[D.GROUP].to_numpy()
 
     # Test set (fold-bagged predictions). Skipped for smoke tests.
-    Xte = row_id = None
+    test = Xte = row_id = None
     if not sample:
         test = add_features(D.load_test())
+        # Align categorical levels across train/test so category codes match
+        # (XGBoost/LightGBM/HistGB compare category dtypes during predict).
+        for c in cats:
+            levels = pd.unique(pd.concat([df[c].astype("object"), test[c].astype("object")],
+                                         ignore_index=True))
+            dtype = pd.CategoricalDtype(categories=levels)
+            df[c] = df[c].astype("object").astype(dtype)
+            test[c] = test[c].astype("object").astype(dtype)
         row_id = test["row_id"].to_numpy()
         Xte = test[feats]
         test_pred = np.zeros(len(test))
+
+    X, y, groups = df[feats], df[D.TARGET].to_numpy(), df[D.GROUP].to_numpy()
 
     oof = np.zeros(len(df))
     fold_aucs = []
@@ -70,20 +125,13 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
                 Xte_k = pd.concat([Xte, te.transform(test)], axis=1)
 
         est = build_estimator(model)
-        if model == "lgbm":
-            import lightgbm as lgb
-            est.fit(
-                Xtr, y[tr],
-                eval_set=[(Xva, y[va])], eval_metric="auc",
-                categorical_feature=cats,
-                callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)],
-            )
-            oof[va] = est.predict_proba(Xva)[:, 1]
-            if Xte is not None:
-                test_pred += est.predict_proba(Xte_k)[:, 1] / n_splits
+        va_pred, te_pred, bi = _fit_predict(model, est, Xtr, y[tr], Xva, y[va], Xte_k, cats)
+        oof[va] = va_pred
+        if Xte is not None:
+            test_pred += te_pred / n_splits
         auc = roc_auc_score(y[va], oof[va])
         fold_aucs.append(auc)
-        print(f"  fold {k}: AUC={auc:.5f}  (best_iter={getattr(est,'best_iteration_', '-')})")
+        print(f"  fold {k}: AUC={auc:.5f}  (best_iter={bi})")
 
     oof_auc = roc_auc_score(y, oof)
     res = {
