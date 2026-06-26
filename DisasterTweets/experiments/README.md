@@ -25,10 +25,16 @@ alone is preferred for submission.
 Metric is F1 on the labeled val subset (`StratifiedShuffleSplit`, seed 42). These are
 **zero-shot** (just a prompt, no fine-tuning), for comparison against the trained models.
 
-| ID | Date | Model (Groq) | F1 | Precision | Recall | Acc | Notes |
-|----|------|--------------|---:|----------:|-------:|----:|-------|
-| llm-001 | 2026-06-25 | qwen/qwen3-32b | 0.703 | 0.864 | 0.593 | 0.785 | Best LLM zero-shot; still recall-bound. |
-| llm-002 | 2026-06-25 | meta-llama/llama-4-scout-17b | 0.605 | 0.907 | 0.453 | 0.745 | Very high precision, low recall (over-conservative). |
+| ID | Date | Model (Groq) | Shots | F1 | Precision | Recall | Acc | Notes |
+|----|------|--------------|------:|---:|----------:|-------:|----:|-------|
+| llm-001 | 2026-06-25 | qwen/qwen3-32b | 0 | 0.703 | 0.864 | 0.593 | 0.785 | Best LLM zero-shot; recall-bound. |
+| llm-002 | 2026-06-25 | meta-llama/llama-4-scout-17b | 0 | 0.605 | 0.907 | 0.453 | 0.745 | High precision, low recall (over-conservative). |
+| llm-003 | 2026-06-25 | meta-llama/llama-4-scout-17b | 8 | 0.708 | 0.866 | 0.599 | 0.788 | Few-shot lifts recall 0.453→0.599 (+0.10 F1). |
+| llm-004 | 2026-06-25 | qwen/qwen3-32b | 8 | _pending_ | — | — | — | Few-shot run in progress (TPM-limited). |
+
+For a directly comparable view (trained models scored on the same 400-tweet val slice) and the
+full write-up, see [`reports/RESULTS.md`](../reports/RESULTS.md): RoBERTa **0.8012**, baseline
+**0.7701** on that slice — both above the LLMs.
 
 **Takeaway:** zero-shot LLMs (0.60–0.70) trail fine-tuned RoBERTa (0.804) by a wide margin,
 limited by **recall** — they only flag unambiguous disasters. Few-shot examples are the obvious
