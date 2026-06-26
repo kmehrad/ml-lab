@@ -12,7 +12,7 @@ Groq API (no training). Last updated 2026-06-25.
 |---|---|---:|---:|---:|
 | **RoBERTa-base (fine-tuned)** | trained | **0.8012** | **0.80445** | **0.83879** |
 | TF-IDF + LogisticRegression | trained | 0.7701 | 0.77446 | 0.80324 |
-| Qwen 3-32B, few-shot(8) | LLM, no training | _pending_ | — | — |
+| Qwen 3-32B, few-shot(8) | LLM, no training | 0.7280 ¹ | — | — |
 | Llama 4 Scout, few-shot(8) | LLM, no training | 0.7079 | — | — |
 | Qwen 3-32B, zero-shot | LLM, no training | 0.7034 | — | — |
 | Llama 4 Scout, zero-shot | LLM, no training | 0.6047 | — | — |
@@ -30,10 +30,13 @@ directly comparable. Trained-model rows apply each model's OOF-tuned threshold.
 |---|---:|---:|---:|---:|
 | RoBERTa-base (fine-tuned) | **0.8012** | — | — | — |
 | TF-IDF + LogReg (baseline) | 0.7701 | — | — | — |
-| Qwen 3-32B — few-shot(8) | _pending_ | _pending_ | _pending_ | _pending_ |
+| Qwen 3-32B — few-shot(8) ¹ | 0.7280 | 0.856 | 0.633 | 0.796 |
 | Llama 4 Scout — few-shot(8) | 0.7079 | 0.866 | 0.599 | 0.788 |
 | Qwen 3-32B — zero-shot | 0.7034 | 0.864 | 0.593 | 0.785 |
 | Llama 4 Scout — zero-shot | 0.6047 | 0.907 | 0.453 | 0.745 |
+
+¹ Qwen 3 few-shot covered 348/400 rows before Groq's daily request cap (1000/day) was hit; the
+F1 is on the covered subset — treat as approximate.
 
 ### Key finding: LLMs are recall-bound
 Zero-shot LLMs have **high precision but low recall** — they only flag unambiguous disasters
@@ -147,6 +150,14 @@ is **efficiency** — ~88% of tweets never call the LLM, so the full 3,263-row t
 
 Run: `uv run python -m src.route --llm qwen3 --split val` (cached) ·
 `--split test` queries the LLM on disagreements only and writes a submission.
+
+**Test-set outcome (submitted).** 364/3263 test rows (11.2%) were RoBERTa/TF-IDF disagreements;
+286 got a Qwen 3 vote before we hit Groq's **daily request cap (1000 req/day, qwen3)**, and the
+remaining 78 gracefully fell back to RoBERTa. Public LB = **0.83879 — identical to RoBERTa alone**.
+So the routed ensemble was **F1-neutral on the leaderboard**: RoBERTa already captures the signal,
+and the LLM tiebreaker neither helped nor hurt the public-scored rows. Conclusion: the hybrid's
+value here is *efficiency / cost control*, not accuracy — for this task a single fine-tuned RoBERTa
+is the best and simplest production model (LB 0.83879).
 
 ## 7. Reproduce
 

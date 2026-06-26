@@ -30,7 +30,17 @@ Metric is F1 on the labeled val subset (`StratifiedShuffleSplit`, seed 42). Thes
 | llm-001 | 2026-06-25 | qwen/qwen3-32b | 0 | 0.703 | 0.864 | 0.593 | 0.785 | Best LLM zero-shot; recall-bound. |
 | llm-002 | 2026-06-25 | meta-llama/llama-4-scout-17b | 0 | 0.605 | 0.907 | 0.453 | 0.745 | High precision, low recall (over-conservative). |
 | llm-003 | 2026-06-25 | meta-llama/llama-4-scout-17b | 8 | 0.708 | 0.866 | 0.599 | 0.788 | Few-shot lifts recall 0.453→0.599 (+0.10 F1). |
-| llm-004 | 2026-06-25 | qwen/qwen3-32b | 8 | _pending_ | — | — | — | Few-shot run in progress (TPM-limited). |
+| llm-004 | 2026-06-25 | qwen/qwen3-32b | 8 | 0.728 | 0.856 | 0.633 | 0.796 | Partial (348/400 covered; hit Groq 1000/day cap). Few-shot lifts recall 0.593→0.633. |
+
+### Hybrid: disagreement-gated LLM ensemble (`src/route.py`)
+
+| ID | Date | Method | Val F1 | Public LB | Notes |
+|----|------|--------|-------:|----------:|-------|
+| route-001 | 2026-06-25 | RoBERTa+TFIDF agree, else qwen3 tiebreaker | 0.8064 (vs 0.8012) | **0.83879** | LLM only on 11% disagreement rows. **Submitted; LB = RoBERTa alone → F1-neutral.** 286/364 test ambig LLM-decided, 78 RoBERTa fallback (daily cap). |
+
+**Conclusion:** the LLM tiebreaker is F1-neutral on the leaderboard (0.83879 = RoBERTa alone).
+Its value is cost/efficiency (~9× fewer LLM calls), not accuracy. **RoBERTa remains the best,
+simplest production model.**
 
 For a directly comparable view (trained models scored on the same 400-tweet val slice) and the
 full write-up, see [`reports/RESULTS.md`](../reports/RESULTS.md): RoBERTa **0.8012**, baseline
