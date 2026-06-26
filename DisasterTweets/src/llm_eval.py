@@ -126,6 +126,61 @@ def _load_cache(path: Path) -> dict[int, int]:
     return cache
 
 
+def predict_frame(client, model, fewshot, df, cache_tag, shots, workers,
+                  qwen_nothink: bool = True) -> tuple[dict[int, int], int]:
+    """Classify the rows of ``df`` (cols id/keyword/text); return ({id: label}, n_failures).
+
+    Cache is per ``cache_tag`` and keyed by tweet id, so any previously-scored ids are reused.
+    Shared by :func:`classify` (whole split) and :mod:`src.route` (just the ambiguous subset).
+    """
+    cache_path = CACHE / f"{cache_tag}.jsonl"
+    cache = _load_cache(cache_path)
+    sys_msg = SYSTEM + (" /no_think" if (qwen_nothink and "qwen" in model) else "")
+    base = [{"role": "system", "content": sys_msg}] + fewshot
+    max_tok = 1024 if ("qwen" in model or "oss" in model) else 8
+
+    def call(row_id, keyword, text):
+        if row_id in cache:
+            return row_id, cache[row_id], "cached"
+        msgs = base + [{"role": "user", "content": _user_msg(keyword, text)}]
+        for attempt in range(8):
+            try:
+                resp = client.chat.completions.create(
+                    model=model, messages=msgs, temperature=0.0,
+                    max_completion_tokens=max_tok,
+                )
+                pred = _parse(resp.choices[0].message.content)
+                if pred is None and attempt < 2:  # unparseable -> retry a couple times
+                    time.sleep(1.0)
+                    continue
+                return row_id, (0 if pred is None else pred), "ok"
+            except Exception as e:  # rate limit / transient
+                wait = _retry_after(str(e), attempt)
+                if attempt == 7:
+                    print(f"  id {row_id}: failed after retries ({e})")
+                    return row_id, None, "fail"  # None -> not cached, excluded
+                time.sleep(wait)
+
+    records = list(zip(df[data.ID_COL], df[data.KEYWORD_COL], df[data.TEXT_COL]))
+    preds: dict[int, int] = {}
+    fails = 0
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=workers) as ex, open(cache_path, "a") as fh:
+        futs = [ex.submit(call, rid, kw, tx) for rid, kw, tx in records]
+        for i, fut in enumerate(as_completed(futs)):
+            rid, pred, status = fut.result()
+            if status == "fail" or pred is None:
+                fails += 1
+                continue
+            preds[rid] = pred
+            if status == "ok":
+                fh.write(json.dumps({"id": int(rid), "pred": int(pred)}) + "\n")
+                fh.flush()
+            if (i + 1) % 50 == 0:
+                print(f"  {i+1}/{len(records)} ({time.time()-t0:.0f}s)")
+    return preds, fails
+
+
 def classify(model_key: str, split: str, n: int, shots: int, workers: int,
              qwen_nothink: bool = True) -> dict:
     model = MODELS.get(model_key, model_key)
@@ -149,54 +204,9 @@ def classify(model_key: str, split: str, n: int, shots: int, workers: int,
         fewshot = _build_fewshot(tr, set(), shots)
 
     # cache key includes shot count — few-shot answers differ from zero-shot for the same id
-    cache_path = CACHE / f"{key}_{split}_s{shots}.jsonl"
-    cache = _load_cache(cache_path)
-
-    sys_msg = SYSTEM + (" /no_think" if (qwen_nothink and "qwen" in model) else "")
-    base = [{"role": "system", "content": sys_msg}] + fewshot
-
-    max_tok = 1024 if ("qwen" in model or "oss" in model) else 8
-
-    def call(row_id, keyword, text):
-        if row_id in cache:
-            return row_id, cache[row_id], "cached"
-        msgs = base + [{"role": "user", "content": _user_msg(keyword, text)}]
-        for attempt in range(8):
-            try:
-                resp = client.chat.completions.create(
-                    model=model, messages=msgs, temperature=0.0,
-                    max_completion_tokens=max_tok,
-                )
-                pred = _parse(resp.choices[0].message.content)
-                # treat an unparseable reply as transient and retry a couple times
-                if pred is None and attempt < 2:
-                    time.sleep(1.0)
-                    continue
-                return row_id, (0 if pred is None else pred), "ok"
-            except Exception as e:  # rate limit / transient
-                wait = _retry_after(str(e), attempt)
-                if attempt == 7:
-                    print(f"  id {row_id}: failed after retries ({e})")
-                    return row_id, None, "fail"  # None -> not cached, excluded from metrics
-                time.sleep(wait)
-
-    records = list(zip(df[data.ID_COL], df[data.KEYWORD_COL], df[data.TEXT_COL]))
-    preds: dict[int, int] = {}
-    fails = 0
+    cache_tag = f"{key}_{split}_s{shots}"
     t0 = time.time()
-    with ThreadPoolExecutor(max_workers=workers) as ex, open(cache_path, "a") as fh:
-        futs = [ex.submit(call, rid, kw, tx) for rid, kw, tx in records]
-        for i, fut in enumerate(as_completed(futs)):
-            rid, pred, status = fut.result()
-            if status == "fail" or pred is None:
-                fails += 1
-                continue
-            preds[rid] = pred
-            if status == "ok":  # never persist cached rows again or failures
-                fh.write(json.dumps({"id": int(rid), "pred": int(pred)}) + "\n")
-                fh.flush()
-            if (i + 1) % 50 == 0:
-                print(f"  {i+1}/{len(records)} ({time.time()-t0:.0f}s)")
+    preds, fails = predict_frame(client, model, fewshot, df, cache_tag, shots, workers, qwen_nothink)
     elapsed = time.time() - t0
 
     covered = np.array([i in preds for i in ids])
