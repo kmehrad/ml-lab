@@ -155,7 +155,11 @@ def predict_frame(client, model, fewshot, df, cache_tag, shots, workers,
                     continue
                 return row_id, (0 if pred is None else pred), "ok"
             except Exception as e:  # rate limit / transient
-                wait = _retry_after(str(e), attempt)
+                msg = str(e)
+                # daily request cap won't reset for hours -> stop retrying, fail fast
+                if "per day" in msg or "RPD" in msg:
+                    return row_id, None, "rpd"
+                wait = _retry_after(msg, attempt)
                 if attempt == 7:
                     print(f"  id {row_id}: failed after retries ({e})")
                     return row_id, None, "fail"  # None -> not cached, excluded
