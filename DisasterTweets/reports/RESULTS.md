@@ -68,7 +68,60 @@ few-shot LLMs land near the *classic* baseline, below fine-tuned RoBERTa.
 - **Rate limits (free tier):** Qwen 3 ~6k tokens/min (~30 req/min) — few-shot is token-heavy
   and slow; budget tens of minutes for the full 3,263-row test set.
 
-## 5. Reproduce
+## 5. Exact prompt
+
+Source of truth: `src/llm_eval.py` (`SYSTEM`, `_user_msg`, `_build_fewshot`). The request is
+`temperature=0`, and a single message list: **system → [few-shot pairs] → user(target tweet)**.
+
+### System message (both zero- and few-shot)
+```
+You are an expert content classifier for emergency and disaster monitoring. Given a tweet,
+decide whether it refers to a REAL disaster or emergency — an actual ongoing or reported event
+such as a natural disaster, fire, explosion, accident, crash, attack, outbreak, or similar — as
+opposed to a metaphorical, figurative, joking, headline-of-an-unrelated-topic, or otherwise
+non-disaster use of those words. Reply with exactly one character: 1 if it is about a real
+disaster, 0 if not. No other text.
+```
+For Qwen 3 the suffix ` /no_think` is appended to the system message to disable its reasoning trace.
+
+### User message template
+Built per tweet; the keyword line is omitted when the keyword is missing (URL-encoded `%20`
+in keywords is decoded to spaces):
+```
+Keyword: {keyword}
+Tweet: {text}
+Answer (1 or 0):
+```
+Concrete rendered example (real train row):
+```
+Keyword: ablaze
+Tweet: @bbcmtd Wholesale Markets ablaze http://t.co/lHYXEOHY6C
+Answer (1 or 0):
+```
+
+### Zero-shot (`--shots 0`)
+Message list = `[system, user(target)]`. The model replies with a single `1` or `0`
+(`max_completion_tokens=8` for Llama 4; `1024` for Qwen 3 to leave room before `/no_think` truncation).
+
+### Few-shot (`--shots 8`)
+Eight **balanced** examples (4 positive, 4 negative) are sampled from `train` with seed 42,
+**excluding the val slice** (no leakage), and inserted as alternating turns before the target:
+```
+system
+user:      Keyword: {kw_1}\nTweet: {text_1}\nAnswer (1 or 0):
+assistant: 1
+user:      Keyword: {kw_2}\nTweet: {text_2}\nAnswer (1 or 0):
+assistant: 0
+... (8 example pairs total) ...
+user:      Keyword: {kw}\nTweet: {text}\nAnswer (1 or 0):     ← target tweet, model answers
+```
+
+### Response parsing (`_parse`)
+Robust to stray text: prefers a `label: 0|1` pattern, else the last standalone `0`/`1` token,
+else falls back to the words "disaster"/"not". Unparseable replies are retried; persistent
+failures are excluded from scoring (not defaulted to a class).
+
+## 6. Reproduce
 
 ```bash
 # trained models
