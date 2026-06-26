@@ -56,7 +56,14 @@ uv run python -m src.submit --model blend                # writes outputs/blend_
 
 ## Results
 
-_Pending — see `experiments/README.md` for the run history and OOF F1 table._
+| Model | OOF F1 | Public LB |
+|---|---|---|
+| TF-IDF + LogisticRegression (baseline) | 0.77446 | 0.80324 |
+| **RoBERTa-base (5-fold)** | **0.80445** | **0.83879** |
+
+RoBERTa is +0.030 OOF / +0.036 LB over the baseline. The TF-IDF/RoBERTa blend was within
+fold-std noise of RoBERTa, so the simpler single model was submitted. RoBERTa was fine-tuned
+on an RTX 3090 Ti (212s for 5 folds). See `experiments/README.md` for the full history.
 
 ## EDA
 
