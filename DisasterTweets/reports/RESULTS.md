@@ -121,7 +121,34 @@ Robust to stray text: prefers a `label: 0|1` pattern, else the last standalone `
 else falls back to the words "disaster"/"not". Unparseable replies are retried; persistent
 failures are excluded from scoring (not defaulted to a class).
 
-## 6. Reproduce
+## 6. Hybrid — disagreement-gated LLM ensemble (`src/route.py`)
+
+**Goal:** let the LLM help only on *ambiguous* tweets, and pay for LLM calls only there.
+
+**Method.** RoBERTa and TF-IDF agree on the easy/non-ambiguous tweets (~88% of the val slice) —
+take that shared label, no LLM. They disagree on the ambiguous ~12%; resolve those by a **3-way
+majority vote** (RoBERTa + TF-IDF + LLM). Under a majority vote the LLM can only change a row
+where the two trained models disagree, so the LLM is queried on *exactly those rows* — ~8× fewer
+calls than scoring everything. (A probability-band gate `|p−thr|<δ` was also tried; it adds
+nothing here because RoBERTa's probabilities sit near 0/1, so very few tweets are "near-threshold".)
+
+**Val results (same 400-tweet slice):**
+
+| Tiebreaker LLM | Routed F1 | RoBERTa-alone | Δ | LLM calls |
+|---|---:|---:|---:|---:|
+| **Qwen 3-32B (zero-shot)** | **0.8064** | 0.8012 | **+0.0051** | **48 / 400 (12%)** |
+| Llama 4 Scout (zero-shot) | 0.7987 | 0.8012 | −0.0025 | 48 / 400 |
+
+**Read:** Qwen 3 as tiebreaker nudges F1 up while touching only 12% of tweets; Llama 4 zero-shot
+is too recall-poor to help. The **+0.0051 lift is within noise at n=400** (~2 tweets), so the
+honest claim is "F1-neutral-to-slightly-positive at a fraction of the LLM cost." The robust win
+is **efficiency** — ~88% of tweets never call the LLM, so the full 3,263-row test set needs only
+~400–520 LLM calls. To confirm the small accuracy gain, evaluate on a larger labeled slice.
+
+Run: `uv run python -m src.route --llm qwen3 --split val` (cached) ·
+`--split test` queries the LLM on disagreements only and writes a submission.
+
+## 7. Reproduce
 
 ```bash
 # trained models
