@@ -63,7 +63,13 @@ uv run python -m src.submit --model blend                # writes outputs/blend_
 
 RoBERTa is +0.030 OOF / +0.036 LB over the baseline. The TF-IDF/RoBERTa blend was within
 fold-std noise of RoBERTa, so the simpler single model was submitted. RoBERTa was fine-tuned
-on an RTX 3090 Ti (212s for 5 folds). See `experiments/README.md` for the full history.
+on an RTX 3090 Ti (212s for 5 folds).
+
+**Zero/few-shot LLMs (Groq, no training)** were also evaluated on a 400-tweet val slice:
+Qwen 3-32B zero-shot 0.703 / Llama 4 Scout 0.605; few-shot(8) lifts recall (Llama 4 → 0.708).
+They land near the classic baseline but below fine-tuned RoBERTa. Full breakdown (including
+trained models scored on the same slice for a fair comparison) in
+[`reports/RESULTS.md`](reports/RESULTS.md); chronological log in `experiments/README.md`.
 
 ## EDA
 
