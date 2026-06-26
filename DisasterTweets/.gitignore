@@ -1,0 +1,35 @@
+# data & artifacts (never commit raw competition data)
+data/raw/*
+data/processed/*
+!**/.gitkeep
+models/*
+!models/.gitkeep
+outputs/*
+!outputs/.gitkeep
+experiments/artifacts/*
+!experiments/artifacts/.gitkeep
+reports/figures/*
+!reports/figures/.gitkeep
+
+# python / uv
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+.pytest_cache/
+*.egg-info/
+
+# huggingface / torch caches
+.cache/
+wandb/
+
+# credentials
+*.kaggle
+kaggle.json
+access_token
+.env
+
+# editor / os
+.DS_Store
+.vscode/
+.idea/
