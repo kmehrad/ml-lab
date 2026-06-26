@@ -12,7 +12,7 @@ Submit only after CV review + approval.
 | exp-003 | 2026-06-25 | tfidf_svc | 0.76025 | 0.477 | — | 0.75761 ± 0.01082 | LinearSVC(C=0.5), sigmoid scores. Weakest. |
 | exp-004 | 2026-06-25 | tfidf_lr +fix-dups | 0.77396 | 0.477 | — | 0.76861 ± 0.02230 | Dup label majority-vote: ~flat (within noise) → **rejected**. |
 
-| exp-005 | 2026-06-25 | **roberta-base** | **0.80445** | 0.547 | _pending_ | 0.80229 ± 0.00750 | 5-fold fine-tune, 3 epochs, bs32, max_len128, RTX 3090 Ti (212s). **+0.030 over baseline (~4σ).** |
+| exp-005 | 2026-06-25 | **roberta-base** | **0.80445** | 0.547 | **0.83879** | 0.80229 ± 0.00750 | 5-fold fine-tune, 3 epochs, bs32, max_len128, RTX 3090 Ti (212s). **+0.030 OOF / +0.036 LB over baseline. Submitted.** |
 | exp-006 | 2026-06-25 | blend (lr:rob 1:4) | 0.80521 | 0.574 | — | — | Rank-avg. +0.00076 over roberta → **within noise, rejected**; submit roberta alone. |
 
 **exp-001 adopted as classic baseline** (public LB 0.80324). Char n-grams matter (56% of test
