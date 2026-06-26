@@ -71,6 +71,16 @@ def val_indices(y: np.ndarray, n: int) -> np.ndarray:
     return np.sort(idx)
 
 
+def _retry_after(err: str, attempt: int) -> float:
+    """Honor Groq's 'try again in X' hint when present, else exponential backoff."""
+    m = re.search(r"try again in ([\d.]+)(ms|s)", err)
+    if m:
+        val = float(m.group(1))
+        secs = val / 1000 if m.group(2) == "ms" else val
+        return min(secs + 0.3, 30.0)
+    return min(2 ** attempt, 30.0)
+
+
 def _parse(content: str) -> int | None:
     if not content:
         return None
@@ -138,29 +148,37 @@ def classify(model_key: str, split: str, n: int, shots: int, workers: int,
         y = None
         fewshot = _build_fewshot(tr, set(), shots)
 
-    cache_path = CACHE / f"{key}_{split}.jsonl"
+    # cache key includes shot count — few-shot answers differ from zero-shot for the same id
+    cache_path = CACHE / f"{key}_{split}_s{shots}.jsonl"
     cache = _load_cache(cache_path)
 
     sys_msg = SYSTEM + (" /no_think" if (qwen_nothink and "qwen" in model) else "")
     base = [{"role": "system", "content": sys_msg}] + fewshot
 
+    max_tok = 1024 if ("qwen" in model or "oss" in model) else 8
+
     def call(row_id, keyword, text):
         if row_id in cache:
-            return row_id, cache[row_id], True
+            return row_id, cache[row_id], "cached"
         msgs = base + [{"role": "user", "content": _user_msg(keyword, text)}]
-        for attempt in range(4):
+        for attempt in range(8):
             try:
                 resp = client.chat.completions.create(
                     model=model, messages=msgs, temperature=0.0,
-                    max_completion_tokens=1024 if "qwen" in model or "oss" in model else 8,
+                    max_completion_tokens=max_tok,
                 )
                 pred = _parse(resp.choices[0].message.content)
-                return row_id, (0 if pred is None else pred), False
+                # treat an unparseable reply as transient and retry a couple times
+                if pred is None and attempt < 2:
+                    time.sleep(1.0)
+                    continue
+                return row_id, (0 if pred is None else pred), "ok"
             except Exception as e:  # rate limit / transient
-                if attempt == 3:
-                    print(f"  id {row_id}: failed ({e})")
-                    return row_id, 0, False
-                time.sleep(2 * (attempt + 1))
+                wait = _retry_after(str(e), attempt)
+                if attempt == 7:
+                    print(f"  id {row_id}: failed after retries ({e})")
+                    return row_id, None, "fail"  # None -> not cached, excluded from metrics
+                time.sleep(wait)
 
     records = list(zip(df[data.ID_COL], df[data.KEYWORD_COL], df[data.TEXT_COL]))
     preds: dict[int, int] = {}
@@ -169,35 +187,42 @@ def classify(model_key: str, split: str, n: int, shots: int, workers: int,
     with ThreadPoolExecutor(max_workers=workers) as ex, open(cache_path, "a") as fh:
         futs = [ex.submit(call, rid, kw, tx) for rid, kw, tx in records]
         for i, fut in enumerate(as_completed(futs)):
-            rid, pred, cached = fut.result()
+            rid, pred, status = fut.result()
+            if status == "fail" or pred is None:
+                fails += 1
+                continue
             preds[rid] = pred
-            if not cached:
+            if status == "ok":  # never persist cached rows again or failures
                 fh.write(json.dumps({"id": int(rid), "pred": int(pred)}) + "\n")
                 fh.flush()
             if (i + 1) % 50 == 0:
                 print(f"  {i+1}/{len(records)} ({time.time()-t0:.0f}s)")
     elapsed = time.time() - t0
 
-    pred_arr = np.array([preds[i] for i in ids])
+    covered = np.array([i in preds for i in ids])
+    pred_arr = np.array([preds.get(i, 0) for i in ids])
     np.save(ART / f"{key}_{split}_pred.npy", pred_arr)
     np.save(ART / f"{key}_{split}_ids.npy", ids)
 
     out = {"model": model, "key": key, "split": split, "n": len(ids),
+           "covered": int(covered.sum()), "failures": int(fails),
            "shots": shots, "elapsed_s": round(elapsed, 1)}
     if y is not None:
+        yc, pc = y[covered], pred_arr[covered]  # score only covered rows
         out.update({
-            "f1": round(f1_score(y, pred_arr), 5),
-            "precision": round(precision_score(y, pred_arr), 5),
-            "recall": round(recall_score(y, pred_arr), 5),
-            "accuracy": round(accuracy_score(y, pred_arr), 5),
-            "pred_pos_rate": round(float(pred_arr.mean()), 4),
-            "true_pos_rate": round(float(y.mean()), 4),
+            "f1": round(f1_score(yc, pc), 5),
+            "precision": round(precision_score(yc, pc), 5),
+            "recall": round(recall_score(yc, pc), 5),
+            "accuracy": round(accuracy_score(yc, pc), 5),
+            "pred_pos_rate": round(float(pc.mean()), 4),
+            "true_pos_rate": round(float(yc.mean()), 4),
         })
         print(f"[{key}/{split}] F1={out['f1']} P={out['precision']} R={out['recall']} "
-              f"acc={out['accuracy']} (n={len(ids)}, shots={shots}, {elapsed:.0f}s)")
+              f"acc={out['accuracy']} (covered {covered.sum()}/{len(ids)}, "
+              f"shots={shots}, {elapsed:.0f}s)")
     else:
         print(f"[{key}/{split}] {len(ids)} predictions, pos rate "
-              f"{pred_arr.mean():.3f} ({elapsed:.0f}s)")
+              f"{pred_arr.mean():.3f} (covered {covered.sum()}/{len(ids)}, {elapsed:.0f}s)")
     with open(ART / f"{key}_{split}_metrics.json", "w") as fh:
         json.dump(out, fh, indent=2)
     return out
