@@ -1,0 +1,29 @@
+[project]
+name = "disastertweets"
+version = "0.1.0"
+description = "Kaggle: NLP with Disaster Tweets — binary text classification (F1)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scipy>=1.13",
+    "scikit-learn>=1.5",
+    "lightgbm>=4.5",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "nltk>=3.9",
+    "jupyter>=1.1",
+    "pytest>=8.3",
+    "kaggle>=1.6",
+    "torch>=2.4",
+    "transformers>=4.44",
+    "datasets>=2.21",
+    "accelerate>=0.34",
+    "evaluate>=0.4",
+    "groq>=0.11",
+    "python-dotenv>=1.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
