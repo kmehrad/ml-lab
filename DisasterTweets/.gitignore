@@ -27,6 +27,7 @@ wandb/
 *.kaggle
 kaggle.json
 access_token
+.env
 
 # editor / os
 .DS_Store
