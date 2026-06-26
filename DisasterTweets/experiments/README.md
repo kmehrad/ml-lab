@@ -19,3 +19,18 @@ Submit only after CV review + approval.
 tokens are OOV — see EDA). **exp-005 (RoBERTa) is the best model** — a genuine +0.030 OOF gain
 over the baseline (≈4× fold std). The TF-IDF/RoBERTa blend (exp-006) is within noise, so RoBERTa
 alone is preferred for submission.
+
+## Groq LLM zero-shot (no training) — estimated on a fixed 400-tweet stratified val slice
+
+Metric is F1 on the labeled val subset (`StratifiedShuffleSplit`, seed 42). These are
+**zero-shot** (just a prompt, no fine-tuning), for comparison against the trained models.
+
+| ID | Date | Model (Groq) | F1 | Precision | Recall | Acc | Notes |
+|----|------|--------------|---:|----------:|-------:|----:|-------|
+| llm-001 | 2026-06-25 | qwen/qwen3-32b | 0.703 | 0.864 | 0.593 | 0.785 | Best LLM zero-shot; still recall-bound. |
+| llm-002 | 2026-06-25 | meta-llama/llama-4-scout-17b | 0.605 | 0.907 | 0.453 | 0.745 | Very high precision, low recall (over-conservative). |
+
+**Takeaway:** zero-shot LLMs (0.60–0.70) trail fine-tuned RoBERTa (0.804) by a wide margin,
+limited by **recall** — they only flag unambiguous disasters. Few-shot examples are the obvious
+lever to raise recall before spending calls on the 3,263-row test set. Groq free tier is
+rate-limited (qwen3 ~6k TPM → ~30 req/min), so the full test set is slow (~tens of minutes).
