@@ -1,0 +1,24 @@
+[project]
+name = "stellarclass"
+version = "0.1.0"
+description = "Kaggle: Predicting Stellar Class (S6E6) — 3-class tabular classification (Balanced Accuracy)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scipy>=1.13",
+    "scikit-learn>=1.5",
+    "lightgbm>=4.5",
+    "xgboost>=2.1",
+    "catboost>=1.2",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "jupyter>=1.1",
+    "nbformat>=5.10",
+    "pytest>=8.3",
+    "kaggle>=1.6",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
