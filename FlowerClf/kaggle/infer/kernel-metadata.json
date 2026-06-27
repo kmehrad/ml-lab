@@ -1,0 +1,14 @@
+{
+  "id": "kammehr/flowerclf-b3-infer",
+  "title": "FlowerClf b3 infer",
+  "code_file": "flowerclf-b3-infer.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["kammehr/flowerclf-b3-weights"],
+  "competition_sources": ["tpu-getting-started"],
+  "kernel_sources": []
+}
