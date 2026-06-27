@@ -1,0 +1,31 @@
+[project]
+name = "flowerclf"
+version = "0.1.0"
+description = "Kaggle: Petals to the Metal — 104-class flower image classification (macro F1)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "pillow>=10.4",
+    "pyarrow>=17.0",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "tqdm>=4.66",
+    "jupyter>=1.1",
+    "pytest>=8.3",
+    "kaggle>=1.6",
+    "torch>=2.4",
+    "torchvision>=0.19",
+    "timm>=1.0.9",
+]
+
+# TFRecord -> JPEG conversion needs TensorFlow only for the one-time decode step.
+# Kept as an optional extra so the train/predict path stays TF-free.
+#   uv sync --extra convert
+[project.optional-dependencies]
+convert = ["tensorflow-cpu>=2.16"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
