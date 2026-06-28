@@ -29,6 +29,32 @@ def test_color_indices_are_differences():
     assert np.allclose(X["i_z"], df["i"] - df["z"])
 
 
+def test_all_pairwise_colors_present():
+    assert len(F.COLOR_COLS) == 10  # C(5,2)
+    X = F.add_features(_raw_frame())
+    for c in F.COLOR_COLS:
+        assert c in X.columns
+
+
+def test_redshift_color_interactions():
+    df = _raw_frame()
+    X = F.add_features(df)
+    assert np.allclose(X["rz_u_g"], df["redshift"] * (df["u"] - df["g"]))
+
+
+def test_redshift_bin_is_valid_index():
+    X = F.add_features(_raw_frame())
+    assert X["redshift_bin"].notna().all()
+    assert X["redshift_bin"].between(0, len(F.REDSHIFT_BIN_EDGES) - 2).all()
+
+
+def test_magnitude_aggregates():
+    df = _raw_frame()
+    X = F.add_features(df)
+    assert np.allclose(X["mag_mean"], df[F.BANDS].mean(axis=1))
+    assert np.allclose(X["mag_range"], df[F.BANDS].max(axis=1) - df[F.BANDS].min(axis=1))
+
+
 def test_categoricals_are_category_dtype():
     X = F.add_features(_raw_frame())
     for c in F.CATEGORICAL_FEATURES:
