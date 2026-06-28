@@ -4,8 +4,8 @@
 are honest cross-validated estimates, not leaderboard scores. "corrected" = after the per-class
 probability-multiplier search that optimizes balanced accuracy on OOF (see `src/metrics.py`).
 
-> ⚠️ **No Kaggle submission has been made yet** — awaiting review. The submission file is built locally
-> at `outputs/blend_submission.csv` but has not been uploaded.
+> **Submitted:** LightGBM (best individual) scored **0.96659** on the public LB (see LB table below).
+> The lgbm+xgb blend is built locally at `outputs/blend_submission.csv` but not yet uploaded.
 
 ## Model leaderboard (OOF balanced accuracy)
 
@@ -71,4 +71,5 @@ uv run python -m src.submit --model blend      # writes outputs/blend_submission
 ## LB
 | date | submission | LB balanced accuracy | notes |
 |------|------------|----------------------|-------|
-| — | — | — | not submitted yet (pending review) |
+| 2026-06-28 | lgbm_submission.csv | **0.96659** | LightGBM (best individual); LB ≈ OOF 0.96550, no overfit |
+| — | blend lgbm+xgb | — | not submitted yet |

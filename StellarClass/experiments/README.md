@@ -6,7 +6,7 @@ probability multiplier search on OOF (`src.metrics.tune_multipliers`). Full brea
 
 | id | date | model | OOF bal-acc (raw) | OOF bal-acc (corrected) | LB | notes |
 |----|------|-------|-------------------|-------------------------|----|-------|
-| 1 | 2026-06-27 | lgbm | 0.96364 | 0.96550 | — | LightGBM, balanced weights, 3000 trees / lr 0.03 |
+| 1 | 2026-06-27 | lgbm | 0.96364 | 0.96550 | 0.96659 | LightGBM, balanced weights, 3000 trees / lr 0.03 (submitted) |
 | 2 | 2026-06-27 | xgb | 0.96329 | 0.96510 | — | XGBoost hist, native categoricals; ~10 min/fold |
 | 3 | 2026-06-27 | cat | 0.96240 | 0.96246 | — | CatBoost, auto balanced weights |
 | 4 | 2026-06-27 | nn (MLP) | 0.95518 | 0.95518 | — | GPU RTX 3090 Ti; class-weighted CE (self-balanced) |
