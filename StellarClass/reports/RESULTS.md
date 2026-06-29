@@ -6,6 +6,10 @@ probability-multiplier search that optimizes balanced accuracy on OOF (see `src/
 
 > **Submitted:** LightGBM (best individual) scored **0.96659** on the public LB (see LB table below).
 > The lgbm+xgb blend is built locally at `outputs/blend_submission.csv` but not yet uploaded.
+>
+> **Round 2 (improvement attempts) conclusion:** none of the tested levers produced a genuine gain —
+> the pipeline plateaus at ~0.9655–0.9658 OOF, matching the strongest public reference solution. See
+> the "Round 2" section below.
 
 ## Model leaderboard (OOF balanced accuracy)
 
@@ -73,3 +77,47 @@ uv run python -m src.submit --model blend      # writes outputs/blend_submission
 |------|------------|----------------------|-------|
 | 2026-06-28 | lgbm_submission.csv | **0.96659** | LightGBM (best individual); LB ≈ OOF 0.96550, no overfit |
 | — | blend lgbm+xgb | — | not submitted yet |
+
+---
+
+# Round 2 — improvement attempts (target: top public LB 0.97284)
+
+All four approved levers were implemented and tested on the 32-core GPU box. **Every one is neutral**
+— the GBDT plateau is ~0.9655–0.9658 OOF corrected, which also matches the strongest public reference
+solution ([jpoitras2k/Predicting-Stellar-Class](https://github.com/jpoitras2k/Predicting-Stellar-Class):
+lgbm 96.51 / xgb 96.38 / cat 96.27).
+
+### Lever results (LightGBM, OOF balanced accuracy corrected)
+| lever | OOF corrected | verdict |
+|-------|--------------:|---------|
+| baseline (Round-1 features) | 0.96550 | — |
+| + expanded features (all colors, redshift×color, bins, mag aggregates) | 0.96538 | neutral |
+| + leak-safe encoders (frequency + OOF target encoding) | 0.96533 | neutral |
+| + original SDSS17 data (≈100k extra train rows) | 0.96536 | neutral |
+| + all combined | 0.96532 | neutral |
+| Optuna-tuned (raw objective) | 0.96427 | **worse** — see note |
+| `id` / row-order exploit | — | none (class shares flat across id deciles) |
+
+### Final ensemble comparison (consistent expanded-feature base models)
+| ensemble | OOF corrected |
+|----------|--------------:|
+| **mean-blend lgbm+xgb** | **0.96555** |
+| stack (logreg) lgbm+xgb | 0.96549 |
+| single lgbm | 0.96538 |
+| mean-blend lgbm+xgb+cat | 0.96521 |
+| stack (logreg) lgbm+xgb+cat+nn | 0.96481 |
+
+### Why tuning hurt the submitted metric
+Optuna optimized **raw** balanced accuracy and found shallower, well-regularized trees with higher
+raw OOF (0.96408) — but **lower corrected** (0.96427). The default deep model is deliberately
+over-confident, which lets the per-class multiplier correction push minority-class recall much harder
+(multipliers ~2.0/2.5 vs ~1.3/1.4 for the calibrated model). For balanced accuracy with the decision
+correction, the deep default beats the tuned model. (Re-tuning directly on the *corrected* objective
+is the one untried variant; expected upside is small.)
+
+### Takeaway
+The synthetic data is already near the GBDT ceiling on the base photometric + spectral features. The
+~0.006 gap to the top public LB (0.97284) is not reachable via these standard levers; it is most
+likely public-LB overfitting (public is a scored subset; top spots typically regress on private) or a
+non-public competition-specific trick. **Best honest model remains the lgbm+xgb mean-blend
+(OOF 0.96555), essentially tied with the submitted single LightGBM (LB 0.96659).**

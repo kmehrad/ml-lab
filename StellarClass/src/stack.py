@@ -33,7 +33,8 @@ def _stack_features(models: list[str], which: str) -> np.ndarray:
 
 def _meta_model(kind: str):
     if kind == "logreg":
-        return LogisticRegression(max_iter=2000, C=1.0, class_weight="balanced", multi_class="multinomial")
+        # sklearn >=1.9 defaults to multinomial for multiclass; multi_class arg was removed.
+        return LogisticRegression(max_iter=2000, C=1.0, class_weight="balanced")
     raise ValueError(f"unknown meta model: {kind}")
 
 
