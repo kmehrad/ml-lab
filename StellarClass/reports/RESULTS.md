@@ -75,8 +75,8 @@ uv run python -m src.submit --model blend      # writes outputs/blend_submission
 ## LB
 | date | submission | LB balanced accuracy | notes |
 |------|------------|----------------------|-------|
-| 2026-06-28 | lgbm_submission.csv | **0.96659** | LightGBM (best individual); LB ≈ OOF 0.96550, no overfit |
-| — | blend lgbm+xgb | — | not submitted yet |
+| 2026-06-28 | lgbm_submission.csv | **0.96659** | LightGBM (best individual); LB ≈ OOF 0.96550, no overfit. **Best LB.** |
+| 2026-06-29 | blend_submission.csv | 0.96632 | lgbm+xgb mean-blend (OOF 0.96555); LB *below* single lgbm — blend did not transfer |
 
 ---
 
@@ -121,3 +121,7 @@ The synthetic data is already near the GBDT ceiling on the base photometric + sp
 likely public-LB overfitting (public is a scored subset; top spots typically regress on private) or a
 non-public competition-specific trick. **Best honest model remains the lgbm+xgb mean-blend
 (OOF 0.96555), essentially tied with the submitted single LightGBM (LB 0.96659).**
+
+**Confirmed on the LB:** the lgbm+xgb blend scored **0.96632** — *below* the single LightGBM
+(0.96659). The blend's marginal OOF edge did not transfer, so **the single LightGBM (0.96659) remains
+the best submission.** This empirically confirms the plateau.
