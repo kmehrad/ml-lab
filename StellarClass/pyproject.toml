@@ -18,6 +18,7 @@ dependencies = [
     "nbformat>=5.10",
     "pytest>=8.3",
     "kaggle>=1.6",
+    "optuna>=3.6",
 ]
 
 [tool.pytest.ini_options]
