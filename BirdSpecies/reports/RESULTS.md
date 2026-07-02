@@ -8,7 +8,7 @@ multilabel-stratified (seed 42). Features = 86-dim aggregated MFCC
 
 | Model | Features | OOF pooled AUC | OOF macro AUC | Public LB | Notes |
 |-------|----------|---------------:|--------------:|----------:|-------|
-| **RandomForest** | agg-MFCC(86) | **0.92981** | 0.9130 | _(pending)_ | 400 trees, balanced. Best baseline. |
+| **RandomForest** | agg-MFCC(86) | **0.92981** | 0.9130 | **0.89424** | 400 trees, balanced. Best baseline. Private 0.88889 (sub 54251123). |
 | LogReg | agg-MFCC(86) | 0.89515 | 0.8778 | | StandardScaler + balanced, C=1. |
 | LightGBM | agg-MFCC(86) | 0.88545 | 0.8781 | | 300 trees, lr 0.03; overfits few positives. |
 
@@ -28,5 +28,13 @@ multilabel-stratified (seed 42). Features = 86-dim aggregated MFCC
    across classes, so we keep raw scores and drop cross-class calibration.
 3. **Pooled > macro AUC** for every model (RF 0.930 vs 0.913): the 14.6% empty
    clips give clean cross-class negatives that the pooled metric rewards.
-4. **Reminder (from EDA):** measured train/test covariate shift means these OOF
-   numbers are likely **optimistic vs the leaderboard** — treat as an upper bound.
+4. **CV is optimistic vs LB, as predicted.** RF OOF 0.930 → **public LB 0.894
+   / private 0.889** (~0.035–0.04 gap). This confirms the EDA covariate-shift
+   finding: trust the *relative* OOF ordering, not absolute values, and expect
+   real gains to be smaller on the LB than on CV.
+
+## Leaderboard submissions
+
+| Sub | Model | OOF | Public LB | Private LB |
+|-----|-------|----:|----------:|-----------:|
+| 54251123 | RF agg-MFCC(86) | 0.92981 | 0.89424 | 0.88889 |
