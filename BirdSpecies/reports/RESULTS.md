@@ -6,11 +6,17 @@ multilabel-stratified (seed 42). Features = 86-dim aggregated MFCC
 
 ## Summary
 
+Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentiles
+(154) · **full** = + librosa spectral/log-mel from WAV (182).
+
 | Model | Features | OOF pooled AUC | OOF macro AUC | Public LB | Notes |
 |-------|----------|---------------:|--------------:|----------:|-------|
-| **RandomForest** | agg-MFCC(86) | **0.92981** | 0.9130 | **0.89424** | 400 trees, balanced. Best baseline. Private 0.88889 (sub 54251123). |
-| LogReg | agg-MFCC(86) | 0.89515 | 0.8778 | | StandardScaler + balanced, C=1. |
-| LightGBM | agg-MFCC(86) | 0.88545 | 0.8781 | | 300 trees, lr 0.03; overfits few positives. |
+| **RandomForest** | **full(182)** | **0.93732** | 0.9190 | _(pending)_ | Best. +audio (spectral+log-mel). |
+| RandomForest | base(86) | 0.92981 | 0.9130 | **0.89424** | Baseline. Private 0.88889 (sub 54251123). |
+| RandomForest | ext(154) | 0.92983 | 0.9111 | | Δ/percentiles add nothing over base. |
+| LogReg | full(182) | 0.89243 | 0.8814 | | Doesn't benefit from richer features. |
+| LogReg | base(86) | 0.89515 | 0.8778 | | StandardScaler + balanced, C=1. |
+| LightGBM | base(86) | 0.88545 | 0.8781 | | 300 trees; overfits few positives. |
 
 ## Notes
 
@@ -32,6 +38,12 @@ multilabel-stratified (seed 42). Features = 86-dim aggregated MFCC
    / private 0.889** (~0.035–0.04 gap). This confirms the EDA covariate-shift
    finding: trust the *relative* OOF ordering, not absolute values, and expect
    real gains to be smaller on the LB than on CV.
+
+5. **Raw-audio features help; MFCC-derived ones don't.** Adding librosa spectral
+   shape + 16 log-mel band means (`full`) lifts RF **0.92981 → 0.93732** OOF
+   (+0.0075, above noise). MFCC Δ/percentiles (`ext`) are flat — the provided
+   MFCC moments already encode them. So the spectral/mel envelope carries the
+   extra signal, not higher-order MFCC statistics.
 
 ## Leaderboard submissions
 

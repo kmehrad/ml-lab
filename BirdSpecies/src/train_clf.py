@@ -109,10 +109,11 @@ def per_class_auc(Y: np.ndarray, P: np.ndarray) -> list[float]:
 
 
 # ── run ──────────────────────────────────────────────────────────────
-def run(name: str, seed: int = 42, sample: bool = False) -> dict:
-    Xtr = features.feature_matrix("train")
-    Xte = features.feature_matrix("test")
+def run(name: str, seed: int = 42, sample: bool = False, feats: str = "base") -> dict:
+    Xtr = features.feature_matrix("train", feats)
+    Xte = features.feature_matrix("test", feats)
     Y = data.train_targets()
+    run_id = name if feats == "base" else f"{name}_{feats}"
 
     classes = range(Y.shape[1])
     if sample:  # smoke: first 12 classes only (folds unchanged)
@@ -134,6 +135,8 @@ def run(name: str, seed: int = 42, sample: bool = False) -> dict:
     Ys, oofs, tests = Y[:, cols], oof[:, cols], test[:, cols]
     metrics = {
         "model": name,
+        "features": feats,
+        "n_features": Xtr.shape[1],
         "date": str(date.today()),
         "seconds": round(secs, 1),
         "n_classes": len(cols),
@@ -145,19 +148,19 @@ def run(name: str, seed: int = 42, sample: bool = False) -> dict:
 
     if not sample:
         ART.mkdir(parents=True, exist_ok=True)
-        np.save(ART / f"{name}_oof.npy", oof)
-        np.save(ART / f"{name}_test.npy", test)
+        np.save(ART / f"{run_id}_oof.npy", oof)
+        np.save(ART / f"{run_id}_test.npy", test)
         np.save(ART / "y.npy", Y)
-        (ART / f"{name}_metrics.json").write_text(json.dumps(metrics, indent=2))
-        _append_run_log(name, metrics)
+        (ART / f"{run_id}_metrics.json").write_text(json.dumps(metrics, indent=2))
+        _append_run_log(run_id, metrics)
 
     print(json.dumps(metrics, indent=2))
     return metrics
 
 
-def _append_run_log(name: str, m: dict) -> None:
+def _append_run_log(run_id: str, m: dict) -> None:
     row = (
-        f"| {name} | {m['date']} | {name} | agg-MFCC(86) | "
+        f"| {run_id} | {m['date']} | {m['model']} | {m['features']}({m['n_features']}) | "
         f"{m['pooled_auc']:.5f} |  |  | ranknorm={m['pooled_auc_ranknorm']:.5f}, "
         f"macro={m['macro_auc']:.4f}, {m['seconds']:.0f}s |\n"
     )
@@ -168,10 +171,11 @@ def _append_run_log(name: str, m: dict) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="lgbm", choices=["logreg", "rf", "lgbm"])
+    ap.add_argument("--features", default="base", choices=["base", "ext", "full"])
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--sample", action="store_true", help="quick 12-class smoke run")
     args = ap.parse_args()
-    run(args.model, seed=args.seed, sample=args.sample)
+    run(args.model, seed=args.seed, sample=args.sample, feats=args.features)
 
 
 if __name__ == "__main__":

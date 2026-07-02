@@ -13,3 +13,7 @@ Metric = **pooled AUC** on out-of-fold predictions (one ROC-AUC over all
 | logreg | 2026-07-01 | logreg | agg-MFCC(86) | 0.89515 |  |  | ranknorm=0.87843, macro=0.8778, 2s |
 | rf | 2026-07-01 | rf | agg-MFCC(86) | 0.92981 | 0.89424 | 0.88889 | ranknorm=0.91335, macro=0.9130, 216s. Sub 54251123. |
 | lgbm | 2026-07-01 | lgbm | agg-MFCC(86) | 0.88545 |  |  | ranknorm=0.87974, macro=0.8781, 351s |
+| rf_ext | 2026-07-01 | rf | ext(154) | 0.92983 |  |  | ranknorm=0.91255, macro=0.9111, 218s |
+| rf_full | 2026-07-01 | rf | full(182) | 0.93732 |  |  | ranknorm=0.92021, macro=0.9190, 216s |
+| logreg_ext | 2026-07-01 | logreg | ext(154) | 0.88503 |  |  | ranknorm=0.87339, macro=0.8742, 2s |
+| logreg_full | 2026-07-01 | logreg | full(182) | 0.89243 |  |  | ranknorm=0.87991, macro=0.8814, 2s |
