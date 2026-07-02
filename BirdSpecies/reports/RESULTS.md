@@ -11,7 +11,7 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 
 | Model | Features | OOF pooled AUC | OOF macro AUC | Public LB | Notes |
 |-------|----------|---------------:|--------------:|----------:|-------|
-| **RandomForest** | **full(182)** | **0.93732** | 0.9190 | _(pending)_ | Best. +audio (spectral+log-mel). |
+| **RandomForest** | **full(182)** | **0.93732** | 0.9190 | **0.90799** | Best. +audio. Private 0.89786 (sub 54254895). |
 | RandomForest | base(86) | 0.92981 | 0.9130 | **0.89424** | Baseline. Private 0.88889 (sub 54251123). |
 | RandomForest | ext(154) | 0.92983 | 0.9111 | | Δ/percentiles add nothing over base. |
 | LogReg | full(182) | 0.89243 | 0.8814 | | Doesn't benefit from richer features. |
@@ -49,4 +49,9 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 
 | Sub | Model | OOF | Public LB | Private LB |
 |-----|-------|----:|----------:|-----------:|
-| 54251123 | RF agg-MFCC(86) | 0.92981 | 0.89424 | 0.88889 |
+| 54254895 | **RF full(182)** | 0.93732 | **0.90799** | **0.89786** |
+| 54251123 | RF base(86) | 0.92981 | 0.89424 | 0.88889 |
+
+The +0.0075 OOF gain (base→full) became **+0.0138 public LB** — the audio
+features generalize; CV under-estimated their value here (rare, given the overall
+CV-optimism trend).
