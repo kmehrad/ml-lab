@@ -97,13 +97,11 @@ def test_mfcc_path(file_id: int) -> Path:
 def load_mfcc(path: Path) -> np.ndarray:
     """Load one cepstra file as ``(n_frames, N_MFCC)``.
 
-    Files are stored as ``N_MFCC`` rows × ``n_frames`` columns; we transpose so
-    rows are time frames. A clip that yields a single frame is returned as
-    ``(1, N_MFCC)``.
+    Files are stored as ``N_MFCC`` rows × ``n_frames`` columns (whitespace
+    separated); we transpose so rows are time frames. Uses pandas for speed
+    (bulk-loading ~1700 files).
     """
-    m = np.loadtxt(path)
-    if m.ndim == 1:  # single frame OR single coefficient — disambiguate by length
-        m = m.reshape(N_MFCC, -1) if m.shape[0] % N_MFCC == 0 else m[None, :]
+    m = pd.read_csv(path, sep=r"\s+", header=None).to_numpy(dtype=float)
     if m.shape[0] == N_MFCC:
         m = m.T
     if m.shape[1] != N_MFCC:

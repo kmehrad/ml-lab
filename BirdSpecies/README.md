@@ -3,6 +3,10 @@
 Solution for Kaggle [**Multi-label Bird Species Classification – NIPS 2013**](https://www.kaggle.com/competitions/multilabel-bird-species-classification-nips2013)
 (the **NIPS4B 2013** bird-song challenge).
 
+> **Note:** don't confuse this with the separate **MLSP 2013** bird challenge
+> (`mlsp-2013-birds`) — a different competition (19 species, histogram-of-segments
+> features). This project targets **NIPS4B 2013** (87 classes, MFCC + WAV).
+
 - **Task:** multi-label — for each recording, predict which of **87 classes**
   (species × call/song) are present.
 - **Metric:** **AUC** (one ROC-AUC over all pooled `test file × class` pairs).
