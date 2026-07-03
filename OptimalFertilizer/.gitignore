@@ -1,6 +1,7 @@
 # data & artifacts (never commit raw competition data)
 data/raw/*
 data/processed/*
+data/original/*
 !**/.gitkeep
 models/*
 !models/.gitkeep
