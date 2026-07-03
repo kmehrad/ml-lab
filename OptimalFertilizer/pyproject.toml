@@ -1,0 +1,25 @@
+[project]
+name = "optimalfertilizer"
+version = "0.1.0"
+description = "Kaggle Playground S5E6 — Predicting Optimal Fertilizers (MAP@3 multi-class GBDT ensemble)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "catboost>=1.2.10",
+    "jupyter>=1.1.1",
+    "kaggle>=1.6.17",
+    "lightgbm>=4.6.0",
+    "matplotlib>=3.9.0",
+    "nbformat>=5.10.4",
+    "numpy>=2.0.0",
+    "pandas>=2.2.0",
+    "pyarrow>=17.0.0",
+    "pytest>=8.3.0",
+    "scikit-learn>=1.5.0",
+    "scipy>=1.14.0",
+    "seaborn>=0.13.2",
+    "xgboost>=2.1.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -18,9 +18,11 @@ __pycache__/
 **/models/*.joblib
 **/models/*.pkl
 **/submissions/*.csv
+**/outputs/*.csv
 **/outputs/*.png
 **/outputs/*.txt
 **/reports/figures/*.png
+**/experiments/artifacts/*
 
 # CatBoost runtime logs
 **/catboost_info/
