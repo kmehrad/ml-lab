@@ -11,7 +11,8 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 
 | Model | Features | OOF pooled AUC | OOF macro AUC | Public LB | Notes |
 |-------|----------|---------------:|--------------:|----------:|-------|
-| **RandomForest** | **full(182)** | **0.93732** | 0.9190 | **0.90799** | Best. +audio. Private 0.89786 (sub 54254895). |
+| **Blend (rf_full+rf+cnn)** | mixed | **0.94099** | — | **0.91598** | Final. Global rank-average. Private 0.90821 (sub 54284029). |
+| RandomForest | full(182) | 0.93732 | 0.9190 | 0.90799 | Best single. +audio. Private 0.89786 (sub 54254895). |
 | RandomForest | base(86) | 0.92981 | 0.9130 | **0.89424** | Baseline. Private 0.88889 (sub 54251123). |
 | RandomForest | ext(154) | 0.92983 | 0.9111 | | Δ/percentiles add nothing over base. |
 | LogReg | full(182) | 0.89243 | 0.8814 | | Doesn't benefit from richer features. |
@@ -55,9 +56,20 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 
 | Sub | Model | OOF | Public LB | Private LB |
 |-----|-------|----:|----------:|-----------:|
-| 54254895 | **RF full(182)** | 0.93732 | **0.90799** | **0.89786** |
+| 54284029 | **Blend rf_full+rf+cnn** | 0.94099 | **0.91598** | **0.90821** |
+| 54254895 | RF full(182) | 0.93732 | 0.90799 | 0.89786 |
 | 54251123 | RF base(86) | 0.92981 | 0.89424 | 0.88889 |
 
-The +0.0075 OOF gain (base→full) became **+0.0138 public LB** — the audio
-features generalize; CV under-estimated their value here (rare, given the overall
-CV-optimism trend).
+Steady climb at every stage — base → +audio features → +CNN blend:
+**public 0.89424 → 0.90799 → 0.91598** (private 0.88889 → 0.89786 → 0.90821).
+The +0.0075 OOF gain (base→full) became +0.0138 public LB; the blend's +0.0037
+OOF became +0.0080 public. OOF gains hold up directionally on the LB even though
+absolute CV is optimistic (covariate shift).
+
+## Key findings (7)
+
+7. **The blend wins by diversity, not by strong members.** rf_full+rf alone
+   (0.937) doesn't beat rf_full; adding the weaker CNN (0.910) lifts the blend to
+   **0.94099 OOF → 0.91598 public LB** — its distinct log-mel representation
+   decorrelates the errors. **Global** rank-average (not per-class) is essential:
+   raw-mean averaging scores only 0.926 (RF/CNN scales differ).

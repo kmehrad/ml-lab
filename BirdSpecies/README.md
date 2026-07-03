@@ -57,7 +57,22 @@ uv run python -m src.submit --name <run>   # --submit to upload (after CV approv
 
 ## Results
 
-See `experiments/README.md` (run log) and `reports/RESULTS.md` (summary). EDA in
-`notebooks/01_eda.ipynb` → `reports/EDA_FINDINGS.md`.
+Metric = **pooled AUC** over all `file × class` pairs. OOF = 5-fold
+multilabel-stratified.
 
-_(populated as phases complete)_
+| Submission | OOF | Public LB | Private LB |
+|------------|----:|----------:|-----------:|
+| **Blend** (rank-avg rf_full+rf+cnn) | **0.94099** | **0.91598** | **0.90821** |
+| RF full(182) — MFCC + librosa spectral/log-mel | 0.93732 | 0.90799 | 0.89786 |
+| RF base(86) — aggregated MFCC | 0.92981 | 0.89424 | 0.88889 |
+
+Model ladder (best single): RandomForest 0.937 > CNN (log-mel, timm) 0.910 >
+LogReg 0.895 > LightGBM 0.885 (OOF). Details in `reports/RESULTS.md` and the run
+log `experiments/README.md`; EDA in `notebooks/01_eda.ipynb` →
+`reports/EDA_FINDINGS.md`.
+
+**Takeaways:** RF on engineered audio features carries the score; raw-audio
+spectral/log-mel features beat MFCC-only; the CNN underperforms alone but adds
+decisive ensemble diversity; global (not per-class) rank-average is the right
+combiner; and CV is a reliable *ordering* but optimistic in absolute terms
+(measured train/test covariate shift).

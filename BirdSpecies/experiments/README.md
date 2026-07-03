@@ -18,3 +18,4 @@ Metric = **pooled AUC** on out-of-fold predictions (one ROC-AUC over all
 | logreg_ext | 2026-07-01 | logreg | ext(154) | 0.88503 |  |  | ranknorm=0.87339, macro=0.8742, 2s |
 | logreg_full | 2026-07-01 | logreg | full(182) | 0.89243 |  |  | ranknorm=0.87991, macro=0.8814, 2s |
 | cnn | 2026-07-02 | cnn-efficientnet_b0 | logmel | 0.90990 |  |  | macro=0.8953, 18ep/mps, 4084s |
+| blend | 2026-07-02 | rank-avg rf_full+rf+cnn | mixed | 0.94099 | 0.91598 | 0.90821 | Best. Global rank-average. Sub 54284029. |
