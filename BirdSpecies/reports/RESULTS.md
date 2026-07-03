@@ -17,6 +17,7 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 | LogReg | full(182) | 0.89243 | 0.8814 | | Doesn't benefit from richer features. |
 | LogReg | base(86) | 0.89515 | 0.8778 | | StandardScaler + balanced, C=1. |
 | LightGBM | base(86) | 0.88545 | 0.8781 | | 300 trees; overfits few positives. |
+| CNN (effnet_b0) | log-mel | 0.90990 | 0.8953 | | timm transfer, 18ep/mps, SpecAugment. Diversity member. |
 
 ## Notes
 
@@ -44,6 +45,11 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
    (+0.0075, above noise). MFCC Δ/percentiles (`ext`) are flat — the provided
    MFCC moments already encode them. So the spectral/mel envelope carries the
    extra signal, not higher-order MFCC statistics.
+
+6. **The CNN underperforms the classical RF but is a diversity source.** A
+   timm EfficientNet-B0 on log-mel spectrograms reaches OOF 0.90990 — below
+   RF-full (0.937), as expected with only 7–20 positives/class. Its value is
+   ensemble diversity (different representation + model family) for the blend.
 
 ## Leaderboard submissions
 
