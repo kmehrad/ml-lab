@@ -1,8 +1,11 @@
 # Results — BirdSpecies (NIPS4B 2013 Bird Challenge)
 
 Metric: **pooled AUC** (one ROC-AUC over all `file × class` pairs). OOF = 5-fold
-multilabel-stratified (seed 42). Features = 86-dim aggregated MFCC
-(`src/features.py`). Full run log: `experiments/README.md`.
+multilabel-stratified (seed 42). Features = aggregated audio descriptors
+(`src/features.py`, levels base/ext/full) + log-mel CNN. Full run log:
+`experiments/README.md`.
+
+**Best: blend `rf_full+rf+cnn` — OOF 0.94099, public LB 0.91598, private 0.90821.**
 
 ## Summary
 
@@ -51,6 +54,11 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
    timm EfficientNet-B0 on log-mel spectrograms reaches OOF 0.90990 — below
    RF-full (0.937), as expected with only 7–20 positives/class. Its value is
    ensemble diversity (different representation + model family) for the blend.
+7. **The blend wins by diversity, not by strong members.** rf_full+rf alone
+   (0.937) doesn't beat rf_full; adding the weaker CNN (0.910) lifts the blend to
+   **0.94099 OOF → 0.91598 public LB** — its distinct log-mel representation
+   decorrelates the errors. **Global** rank-average (not per-class) is essential:
+   raw-mean averaging scores only 0.926 (RF/CNN scales differ).
 
 ## Leaderboard submissions
 
@@ -65,11 +73,3 @@ Steady climb at every stage — base → +audio features → +CNN blend:
 The +0.0075 OOF gain (base→full) became +0.0138 public LB; the blend's +0.0037
 OOF became +0.0080 public. OOF gains hold up directionally on the LB even though
 absolute CV is optimistic (covariate shift).
-
-## Key findings (7)
-
-7. **The blend wins by diversity, not by strong members.** rf_full+rf alone
-   (0.937) doesn't beat rf_full; adding the weaker CNN (0.910) lifts the blend to
-   **0.94099 OOF → 0.91598 public LB** — its distinct log-mel representation
-   decorrelates the errors. **Global** rank-average (not per-class) is essential:
-   raw-mean averaging scores only 0.926 (RF/CNN scales differ).

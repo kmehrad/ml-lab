@@ -1,4 +1,4 @@
-# Experiments — BirdSpecies (MLSP 2013 Birds)
+# Experiments — BirdSpecies (NIPS4B 2013 Bird Challenge)
 
 Run log. Each `src/train_clf.py` / `src/train_cnn.py` run appends a row and
 writes artifacts to `experiments/artifacts/` (`{model}_oof.npy`,
