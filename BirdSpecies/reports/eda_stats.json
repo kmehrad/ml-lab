@@ -1,0 +1,77 @@
+{
+  "n_classes": 87,
+  "n_train": 687,
+  "n_test": 1000,
+  "dur_min": 1.0159,
+  "dur_med": 5.0039,
+  "dur_max": 5.0039,
+  "nframes_tr_med": 1287.9999999999995,
+  "nframes_te_med": 1287.9999999999995,
+  "card_mean": 1.7117903930131004,
+  "card_max": 6,
+  "empty_n": 100,
+  "empty_frac": 0.14556040756914118,
+  "prev_min": 7,
+  "prev_med": 13,
+  "prev_max": 20,
+  "prev_min_class": "Colpal_song",
+  "prev_max_class": "Erirub_song",
+  "n_never_present": 0,
+  "taxon_counts": {
+    "bird": 77,
+    "insect": 9,
+    "amphibian": 1
+  },
+  "voc_counts": {
+    "song": 45,
+    "call": 41,
+    "drum": 1
+  },
+  "nan_train_feats": 0,
+  "nan_test_feats": 0,
+  "inf_train_feats": 0,
+  "n_feats": 86,
+  "n_shifted_p01": 36,
+  "n_shifted_p05": 55,
+  "top_shifted": [
+    "mfcc7_std",
+    "mfcc6_std",
+    "mfcc9_std"
+  ],
+  "near_zero_var_feats": 0,
+  "pca_n_90": 20,
+  "pca_n_95": 31,
+  "top_cooccur": [
+    [
+      "Erirub_call",
+      "Prumod_song",
+      10
+    ],
+    [
+      "Petpet_call",
+      "Sylcan_song",
+      10
+    ],
+    [
+      "Lyrple_song",
+      "Plaaff_song",
+      9
+    ],
+    [
+      "Galcri_call",
+      "Plasab_song",
+      9
+    ],
+    [
+      "Petpet_song",
+      "Sylcan_song",
+      9
+    ],
+    [
+      "Cisjun_song",
+      "Tibtom_song",
+      9
+    ]
+  ],
+  "fold_prev_cv_max": 0.49799195916059563
+}
