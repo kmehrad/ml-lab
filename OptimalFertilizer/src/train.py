@@ -22,7 +22,7 @@ import pandas as pd
 
 from . import data as D
 from .cv import folds
-from .features import add_features, feature_columns
+from .features import add_features, categorical_columns, feature_columns
 from .metric import mapk3
 
 ART = Path(__file__).resolve().parent.parent / "experiments" / "artifacts"
@@ -97,19 +97,22 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
     return va_proba, te_proba, bi
 
 
-def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
-    df = add_features(D.load_train())
+def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
+           groups=("base",), tag: str = "") -> dict:
+    groups = tuple(groups)
+    df = add_features(D.load_train(), groups)
     if sample:
         df = df.sample(n=min(sample, len(df)), random_state=42).reset_index(drop=True)
-    print(f"train rows={len(df):,}  model={model}")
+    print(f"train rows={len(df):,}  model={model}  features={list(groups)}"
+          + (f"  tag={tag}" if tag else ""))
 
-    feats = feature_columns()
-    cats = [c for c in D.CATEGORICAL if c in feats]
+    feats = feature_columns(groups)
+    cats = categorical_columns(groups)
 
     # Test set (fold-bagged). Skipped for smoke tests.
     test = Xte = test_id = None
     if not sample:
-        test = add_features(D.load_test())
+        test = add_features(D.load_test(), groups)
         # Align categorical levels across train/test so category codes match at predict time.
         for c in cats:
             levels = pd.unique(pd.concat([df[c].astype("object"), test[c].astype("object")],
@@ -140,7 +143,7 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
 
     oof_map3 = mapk3(y, oof)
     res = {
-        "model": model, "oof_map3": float(oof_map3),
+        "model": model, "features": list(groups), "tag": tag, "oof_map3": float(oof_map3),
         "fold_mean": float(np.mean(fold_scores)), "fold_std": float(np.std(fold_scores)),
         "fold_scores": [float(s) for s in fold_scores], "n_rows": int(len(df)),
         "n_features": len(feats), "elapsed_s": round(time.time() - t0, 1),
@@ -150,13 +153,15 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5) -> dict:
 
     if not sample:
         ART.mkdir(parents=True, exist_ok=True)
-        np.save(ART / f"{model}_oof.npy", oof)
-        np.save(ART / f"{model}_test.npy", test_proba)
-        np.save(ART / "y.npy", y)
+        suffix = f"_{tag}" if tag else ""
+        np.save(ART / f"{model}{suffix}_oof.npy", oof)
+        np.save(ART / f"{model}{suffix}_test.npy", test_proba)
+        np.save(ART / "y.npy", y)                       # shared, feature-independent
         np.save(ART / "classes.npy", np.array(D.CLASSES, dtype=object))
         np.save(ART / "test_id.npy", test_id)
-        (ART / f"{model}_metrics.json").write_text(json.dumps(res, indent=2))
-        print(f"saved -> {ART}/{model}_oof.npy, {model}_test.npy, {model}_metrics.json")
+        (ART / f"{model}{suffix}_metrics.json").write_text(json.dumps(res, indent=2))
+        print(f"saved -> {ART}/{model}{suffix}_oof.npy, {model}{suffix}_test.npy, "
+              f"{model}{suffix}_metrics.json")
     return res
 
 
@@ -165,5 +170,8 @@ if __name__ == "__main__":
     p.add_argument("--model", default="lgbm", choices=["lgbm", "xgb", "cat"])
     p.add_argument("--sample", type=int, default=None, help="limit to N rows (smoke test; no test preds)")
     p.add_argument("--folds", type=int, default=5)
+    p.add_argument("--features", nargs="+", default=["base"],
+                   help="feature groups: base soilcross npk env")
+    p.add_argument("--tag", default="", help="artifact filename suffix (keeps experiments separate)")
     a = p.parse_args()
-    run_cv(a.model, a.sample, a.folds)
+    run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag)
