@@ -14,7 +14,7 @@ Submit only after CV review + approval. Naive floor (predict 3 most-frequent cla
 | exp-005 | 2026-07-03 | LightGBM + Soil×Crop + NPK | 0.32739 | — | 0.32739 ± 0.00078 | **Rejected (−0.0141).** Added NPK sum/diffs/ratios — deterministic functions of existing features, no new info, more overfit surface (best_iter→~890). |
 | exp-006 | 2026-07-03 | LightGBM + all FE (soilcross+npk+env) | 0.32487 | — | 0.32487 ± 0.00079 | **Rejected (−0.0166).** Env interaction products on top. Monotonic degradation confirms FE is net-negative on this near-noise data. |
 | exp-007 | 2026-07-03 | LightGBM + original-data augmentation | 0.34122 | — | 0.34122 ± 0.00057 | **Rejected (−0.00027, within fold noise).** Appended the 99 UCI seed rows to each train fold. Neutral, as EDA predicted (0.013% of train). best_iter ~1800 (unchanged vs baseline). |
-| exp-008 | 2026-07-03 | Blend proba-avg (lgbm+xgb) | **0.34255** | — | — | **Best OOF, but +0.00056 vs xgb ≈ fold std (~0.0005) → borderline/at noise floor.** Equal-weight probability average. Saved as `blend`. |
+| exp-008 | 2026-07-03 | Blend proba-avg (lgbm+xgb) | **0.34255** | 0.34402 | — | Best OOF (+0.00056 vs xgb ≈ fold std → borderline). Equal-weight probability average, saved as `blend`. **Submitted: public LB 0.34402 (private 0.34550).** Public −0.00013 vs xgb (wash), private **+0.00064** vs xgb — both within noise; blend ≈ xgb, edges it on private. |
 | exp-009 | 2026-07-03 | Blend rank-avg (lgbm+xgb) | 0.33986 | — | — | **Rejected (−0.00213 vs xgb).** Per-column rank-normalising flattens each class to a uniform marginal and breaks the within-row calibration MAP@3 needs. Rank-average is the wrong scheme for this metric. |
 | exp-010 | 2026-07-03 | Blend proba-avg (lgbm+xgb+cat) | 0.34084 | — | — | **Rejected (−0.00115 vs xgb).** Weak CatBoost (0.32091) drags the average; it adds no useful diversity. Confirms the Step-3 decision to drop it. |
 
@@ -25,8 +25,10 @@ Submit only after CV review + approval. Naive floor (predict 3 most-frequent cla
   defaults to `proba`; `rank` kept behind a flag.
 - **Best blend = proba-avg(lgbm, xgb) = 0.34255**, only **+0.00056 over xgb (0.34199) ≈ one fold std**
   → a borderline, at-noise gain, not a clear improvement. CatBoost drags any blend it joins (−).
-- **Decision pending:** whether to spend a submission on the blend (OOF gain within noise) vs. accept
-  xgb (LB 0.34415) as final. Awaiting user call before any Kaggle upload.
+- **Submitted (user approved):** blend public LB **0.34402** / private **0.34550** vs xgb public 0.34415 /
+  private 0.34486. Public is a wash (−0.00013), private favours the blend (+0.00064) — both within noise.
+  Confirms the OOF read: the blend is ≈ xgb, not an above-noise win, but it does edge xgb on the private
+  split. **Blend is the strongest submission by private LB.**
 
 ## Step 4 verdict (features + augmentation)
 - **All engineered features hurt** — monotonic degradation (baseline 0.34149 → +all-FE 0.32487). On this
