@@ -98,16 +98,23 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
 
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
-           groups=("base",), tag: str = "") -> dict:
+           groups=("base",), tag: str = "", augment: bool = False) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
     if sample:
         df = df.sample(n=min(sample, len(df)), random_state=42).reset_index(drop=True)
     print(f"train rows={len(df):,}  model={model}  features={list(groups)}"
-          + (f"  tag={tag}" if tag else ""))
+          + (f"  augment={augment}" if augment else "") + (f"  tag={tag}" if tag else ""))
 
     feats = feature_columns(groups)
     cats = categorical_columns(groups)
+
+    # Original UCI seed rows to append to each TRAINING fold only (never validation/test).
+    Xorig = yorig = None
+    if augment:
+        orig = add_features(D.load_original(), groups)
+        Xorig, yorig = orig[feats], D.encode_target(orig[D.TARGET])
+        print(f"augmenting each train fold with {len(orig)} original UCI rows")
 
     # Test set (fold-bagged). Skipped for smoke tests.
     test = Xte = test_id = None
@@ -126,14 +133,22 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
 
     X = df[feats]
     y = D.encode_target(df[D.TARGET])
+    # Match original-row categoricals to df's (aligned) dtypes so category codes line up.
+    if augment:
+        for c in cats:
+            Xorig[c] = Xorig[c].astype("object").astype(df[c].dtype)
 
     oof = np.zeros((len(df), N_CLASSES))
     fold_scores = []
     t0 = time.time()
     for k, (tr, va) in enumerate(folds(y, n_splits)):
         est = build_estimator(model)
+        Xtr, ytr = X.iloc[tr], y[tr]
+        if augment:
+            Xtr = pd.concat([Xtr, Xorig], ignore_index=True)
+            ytr = np.concatenate([ytr, yorig])
         va_proba, te_proba, bi = _fit_predict(
-            model, est, X.iloc[tr], y[tr], X.iloc[va], y[va], Xte, cats)
+            model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats)
         oof[va] = va_proba
         if Xte is not None:
             test_proba += te_proba / n_splits
@@ -173,5 +188,6 @@ if __name__ == "__main__":
     p.add_argument("--features", nargs="+", default=["base"],
                    help="feature groups: base soilcross npk env")
     p.add_argument("--tag", default="", help="artifact filename suffix (keeps experiments separate)")
+    p.add_argument("--augment", action="store_true", help="append original UCI rows to each train fold")
     a = p.parse_args()
-    run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag)
+    run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag, augment=a.augment)
