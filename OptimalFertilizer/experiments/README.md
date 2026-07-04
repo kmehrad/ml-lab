@@ -8,17 +8,21 @@ Submit only after CV review + approval. Naive floor (predict 3 most-frequent cla
 |----|------|-------|----------:|----------:|-----------------|-------|
 | naive | 2026-07-03 | Most-frequent-3 | 0.27849 | — | — | Floor. Constant prior ranking; per-fold train frequencies. |
 | exp-001 | 2026-07-03 | LightGBM | 0.34149 | — | 0.34149 ± 0.00034 | Baseline, 8 raw features, native categoricals. 2000 trees lr 0.03 num_leaves 63, early stop → best_iter ~1800 (converged). 1406s. |
-| exp-002 | 2026-07-03 | XGBoost | **0.34199** | — | 0.34199 ± 0.00057 | Baseline, same features. hist, enable_categorical, depth 6, lr 0.03. **Best single model** (≈ tied with lgbm, Δ+0.0005 < fold std). best_iter=1999 (hit cap — did not converge). 646s. |
+| exp-002 | 2026-07-03 | XGBoost | **0.34199** | **0.34415** | 0.34199 ± 0.00057 | Baseline, same features. hist, enable_categorical, depth 6, lr 0.03. **Best single model** (≈ tied with lgbm, Δ+0.0005 < fold std). best_iter=1999 (hit cap — did not converge). 646s. **Submitted: public LB 0.34415 (private 0.34486) — LB +0.0022 over OOF, CV tracks LB.** |
 | exp-003 | 2026-07-03 | CatBoost | 0.32091 | — | 0.32091 ± 0.00109 | Baseline, MultiClass, depth 6, lr 0.03. Weakest (−0.021 vs xgb) and **very slow (7728s ≈ 129 min)**. best_iter=1999 (hit cap). **Dropped** from the ensemble (user decision): weakest + slowest. |
 | exp-004 | 2026-07-03 | LightGBM + Soil×Crop | 0.33282 | — | 0.33282 ± 0.00054 | **Rejected (−0.0087).** Explicit 55-level Soil×Crop categorical. LGBM already gets the interaction from the two raw categoricals; the combo only adds a high-cardinality overfit handle (best_iter 1800→~1220). |
 | exp-005 | 2026-07-03 | LightGBM + Soil×Crop + NPK | 0.32739 | — | 0.32739 ± 0.00078 | **Rejected (−0.0141).** Added NPK sum/diffs/ratios — deterministic functions of existing features, no new info, more overfit surface (best_iter→~890). |
 | exp-006 | 2026-07-03 | LightGBM + all FE (soilcross+npk+env) | 0.32487 | — | 0.32487 ± 0.00079 | **Rejected (−0.0166).** Env interaction products on top. Monotonic degradation confirms FE is net-negative on this near-noise data. |
+| exp-007 | 2026-07-03 | LightGBM + original-data augmentation | 0.34122 | — | 0.34122 ± 0.00057 | **Rejected (−0.00027, within fold noise).** Appended the 99 UCI seed rows to each train fold. Neutral, as EDA predicted (0.013% of train). best_iter ~1800 (unchanged vs baseline). |
 
-## Feature engineering verdict (Step 4)
+## Step 4 verdict (features + augmentation)
 - **All engineered features hurt** — monotonic degradation (baseline 0.34149 → +all-FE 0.32487). On this
   near-noise dataset (EDA: MI ~0, features independent), extra features only add overfit surface: `best_iter`
   falls as features are added. **Keep the raw 8 features.** Matches the sibling StellarClass lesson
   (FE neutral/negative on GBDT-ceiling synthetic data).
+- **Original-data augmentation is neutral** (−0.00027, within noise). Rejected.
+- **CV↔LB confirmed:** xgb OOF 0.34199 → public LB 0.34415 (+0.0022). StratifiedKFold is trustworthy for
+  iteration; small OOF gains should transfer.
 
 ## Notes
 - **All three clear the naive floor comfortably** (best +0.064). OOF ~0.34 matches the EDA prediction
