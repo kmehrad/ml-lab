@@ -11,8 +11,15 @@ recommend the best **`Fertilizer Name`** (7 classes) for each row of soil/crop/w
   → we need well-*ranked* class probabilities, then take the top-3.
 - **Size:** train 750,000 rows · test 250,000 rows. 8 features
   (`Temperature, Humidity, Moisture`, `Soil Type`, `Crop Type`, `Nitrogen, Potassium, Phosphorous`).
-- **Character:** low-signal synthetic dataset; public LB clusters tightly (~0.36–0.38). Ranking
-  quality and top-3 tie-handling dominate — small honest CV gains only.
+- **Character:** low-signal synthetic dataset; public LB clusters tightly. Ranking quality and top-3
+  tie-handling dominate — small honest CV gains only.
+
+## Status
+
+Steps 0–5 complete. Best submission: **proba-average(lgbm, xgb) blend** — public LB **0.34402** /
+private **0.34550** (edges the xgb baseline 0.34415 / 0.34486 on private). All gains past the ~0.342
+baseline are within the ±0.0005 fold-noise floor. Full summary in
+[`reports/RESULTS.md`](reports/RESULTS.md).
 
 ## Setup (uv)
 
@@ -28,7 +35,7 @@ unzip -o data/raw/playground-series-s5e6.zip -d data/raw
 ```bash
 uv run pytest                             # MAP@3 metric + submission-format tests
 uv run python -m src.train --model lgbm   # 5-fold CV -> OOF + bagged test .npy in experiments/artifacts/
-uv run python -m src.blend                # equal-weight rank-average of base learners
+uv run python -m src.blend                # equal-weight probability-average of base learners
 uv run python -m src.submit --model blend # build + validate submission vs sample_submission.csv
 ```
 
