@@ -37,12 +37,13 @@ _CAT_NA = "__NA__"  # CatBoost placeholder for missing categoricals
 
 
 def build_estimator(model: str, device: str = "cpu", seed: int = 42,
-                    depth: int | None = None, trees: int | None = None):
+                    depth: int | None = None, trees: int | None = None, lr: float | None = None):
     # class_weight="balanced" aligns the training objective with the balanced-accuracy metric.
+    lr = lr or 0.03
     if model == "lgbm":
         import lightgbm as lgb
         return lgb.LGBMClassifier(
-            n_estimators=trees or 2000, learning_rate=0.03, num_leaves=2 ** (depth or 6) - 1,
+            n_estimators=trees or 2000, learning_rate=lr, num_leaves=2 ** (depth or 6) - 1,
             subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
             reg_lambda=1.0, min_child_samples=100, n_jobs=-1, random_state=seed,
             objective="multiclass", num_class=N_CLASSES, class_weight="balanced", verbose=-1,
@@ -50,7 +51,7 @@ def build_estimator(model: str, device: str = "cpu", seed: int = 42,
     if model == "xgb":
         import xgboost as xgb
         return xgb.XGBClassifier(
-            n_estimators=trees or 2000, learning_rate=0.03, max_depth=depth or 6,
+            n_estimators=trees or 2000, learning_rate=lr, max_depth=depth or 6,
             subsample=0.8, colsample_bytree=0.8, reg_lambda=1.0, min_child_weight=5,
             tree_method="hist", device=device, enable_categorical=True,
             objective="multi:softprob", num_class=N_CLASSES, eval_metric="mlogloss",
@@ -59,7 +60,7 @@ def build_estimator(model: str, device: str = "cpu", seed: int = 42,
     if model == "cat":
         from catboost import CatBoostClassifier
         return CatBoostClassifier(
-            iterations=trees or 2000, learning_rate=0.03, depth=depth or 6, l2_leaf_reg=3.0,
+            iterations=trees or 2000, learning_rate=lr, depth=depth or 6, l2_leaf_reg=3.0,
             loss_function="MultiClass", auto_class_weights="Balanced",
             early_stopping_rounds=100, random_seed=seed,
             task_type="GPU" if device == "cuda" else "CPU", thread_count=-1, verbose=False,
@@ -111,36 +112,47 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            groups=("base",), tag: str = "", device: str = "cpu",
-           seeds: int = 1, seed_base: int = 42,
-           depth: int | None = None, trees: int | None = None) -> dict:
+           seeds: int = 1, seed_base: int = 42, augment: bool = False,
+           depth: int | None = None, trees: int | None = None, lr: float | None = None) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
     if sample:
         df = df.sample(n=min(sample, len(df)), random_state=42).reset_index(drop=True)
     print(f"train rows={len(df):,}  model={model}  features={list(groups)}"
-          + (f"  tag={tag}" if tag else ""))
+          + (f"  augment" if augment else "") + (f"  tag={tag}" if tag else ""))
 
     feats = feature_columns(groups)
     cats = categorical_columns(groups)
+
+    # Original real seed rows appended to each TRAIN fold only (never validation/test).
+    orig = add_features(D.load_original(), groups) if augment else None
 
     # Test set (fold-bagged). Skipped for smoke tests.
     test = Xte = test_id = test_proba = None
     if not sample:
         test = add_features(D.load_test(), groups)
-        # Align categorical levels across train/test so category codes match at predict time.
+        # Align categorical levels across train/test (+ original, if augmenting) so codes match.
         for c in cats:
-            levels = pd.unique(pd.concat([df[c].astype("object"), test[c].astype("object")],
-                                         ignore_index=True))
+            frames = [df[c].astype("object"), test[c].astype("object")]
+            if orig is not None:
+                frames.append(orig[c].astype("object"))
+            levels = pd.unique(pd.concat(frames, ignore_index=True))
             levels = [lv for lv in levels if pd.notna(lv)]   # NaN stays a NaN value, not a category
             dtype = pd.CategoricalDtype(categories=levels)
             df[c] = df[c].astype("object").astype(dtype)
             test[c] = test[c].astype("object").astype(dtype)
+            if orig is not None:
+                orig[c] = orig[c].astype("object").astype(dtype)
         test_id = test[D.ID].to_numpy()
         Xte = test[feats]
         test_proba = np.zeros((len(test), N_CLASSES))
 
     X = df[feats]
     y = D.encode_target(df[D.TARGET])
+    Xorig = orig[feats] if orig is not None else None
+    yorig = D.encode_target(orig[D.TARGET]) if orig is not None else None
+    if augment:
+        print(f"augmenting each train fold with {len(orig):,} original real rows")
 
     # Seed-averaging (RepeatedKFold): average probabilities across independent (split + estimator)
     # seeds before scoring — a cheap, robust lift when the decision is threshold-sensitive.
@@ -152,9 +164,13 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     for seed in seed_list:
         oof_s = np.zeros((len(df), N_CLASSES))
         for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
-            est = build_estimator(model, device=device, seed=seed, depth=depth, trees=trees)
+            est = build_estimator(model, device=device, seed=seed, depth=depth, trees=trees, lr=lr)
+            Xtr, ytr = X.iloc[tr], y[tr]
+            if augment:  # original rows join TRAIN only — validation stays purely synthetic
+                Xtr = pd.concat([Xtr, Xorig], ignore_index=True)
+                ytr = np.concatenate([ytr, yorig])
             va_proba, te_proba, bi = _fit_predict(
-                model, est, X.iloc[tr], y[tr], X.iloc[va], y[va], Xte, cats)
+                model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats)
             oof_s[va] = va_proba
             if Xte is not None:
                 test_proba += te_proba / (n_splits * n_avg)
@@ -168,7 +184,8 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     weights = tune_weights(y, oof)
     tuned_bacc = score_proba(y, oof, weights)
     res = {
-        "model": model, "features": list(groups), "tag": tag,
+        "model": model, "features": list(groups), "tag": tag, "augment": bool(augment),
+        "depth": depth, "trees": trees, "lr": lr,
         "oof_bacc_raw": float(raw_bacc), "oof_bacc_tuned": float(tuned_bacc),
         "decision_weights": [float(w) for w in weights],
         "fold_mean_raw": float(np.mean(fold_scores)), "fold_std_raw": float(np.std(fold_scores)),
@@ -207,6 +224,9 @@ if __name__ == "__main__":
     p.add_argument("--seed-base", type=int, default=42, help="first seed; run uses seed_base..+N-1")
     p.add_argument("--depth", type=int, default=None, help="tree depth override")
     p.add_argument("--trees", type=int, default=None, help="n_estimators override")
+    p.add_argument("--lr", type=float, default=None, help="learning-rate override (default 0.03)")
+    p.add_argument("--augment", action="store_true", help="append original real rows to each train fold")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag, device=a.device,
-           seeds=a.seeds, seed_base=a.seed_base, depth=a.depth, trees=a.trees)
+           seeds=a.seeds, seed_base=a.seed_base, augment=a.augment,
+           depth=a.depth, trees=a.trees, lr=a.lr)

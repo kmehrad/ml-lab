@@ -16,6 +16,12 @@ above-fold-noise gains.
 | 006 | 2026-07-05 | blend lgbm+xgb+cat+nn (proba avg) | base | 0.94976 | 0.94944 | — | — | +0.00004 vs best base — noise. |
 | 007 | 2026-07-05 | blend lgbm+xgb+cat (GBDT only) | base | **0.94979** | 0.94914 | — | **0.94953** | SUBMITTED. CV↔LB gap −0.00026 (within noise) — CV tracks LB. |
 | 008 | 2026-07-05 | hillclimb (all 4) | base | 0.94986 | — | — | — | picks xgb+cat 50/50; +0.00014 vs best single — still sub-noise. |
+| 009 | 2026-07-05 | **Lever 1** augment +50k original: lgbm | base | 0.94918 | 0.94587 | — | — | **REJECT** −0.0004 vs base lgbm. |
+| 010 | 2026-07-05 | Lever 1 augment: xgb | base | 0.94922 | 0.94852 | — | — | **REJECT** −0.0005 vs base xgb. |
+| 011 | 2026-07-05 | Lever 1 augment: cat | base | 0.94906 | 0.94902 | — | — | **REJECT** −0.0002 vs base cat. Real rows have 0 missing; synthetic test is missing-heavy → off-distribution. |
+| 012 | 2026-07-05 | **Lever 2** xgb trees=8000 lr=0.015 | base | 0.94903 | 0.94444 | — | — | **REJECT** −0.0007. best_iter=cap → early stop (log-loss) misaligned with balanced acc; more trees overfit log-loss. |
+| 013 | 2026-07-05 | Lever 2 cat trees=8000 lr=0.015 | base | 0.94930 | 0.94922 | — | — | flat (early-stop fired ~3000); 2000-tree default already optimal. |
+| 014 | 2026-07-05 | **Lever 3** decision-rule global opt + per-fold | base | 0.94980 | — | — | — | no headroom: coord-ascent already global optimum; honest per-fold 0.94959 ≈ LB 0.94953. |
 
 ## Verdicts / narrative
 
@@ -36,3 +42,13 @@ above-fold-noise gains.
   EDA). **Conclusion: the ~0.9497 plateau is the ceiling for this feature set;** further single-model
   tuning (more trees) is the only remaining lever and unlikely to move the plateau. Candidate submission
   = equal-weight 3-GBDT blend (0.94979) — generalizes better than the OOF-overfit hillclimb pick.
+- **Improvement phase (exp-009..014) — the standard levers are exhausted.** Chasing the 0.951 LB cluster:
+  **(1) original-data augmentation REJECTED** — the real 50k rows are complete while the synthetic
+  train/test are missing-heavy, so appending them pushes every GBDT off-distribution (−0.0002..−0.0005).
+  **(2) more-trees/lower-LR REJECTED** — early stopping optimizes log-loss, misaligned with balanced
+  accuracy; the 2000-tree default is already optimal (xgb overfits log-loss with more trees).
+  **(3) decision-rule REJECTED** — coordinate-ascent already hits the global optimum; the honest per-fold
+  estimate (0.94959) matches the LB (0.94953), so there is no hidden decision headroom. Net: the ~0.9497
+  plateau is robust; reaching the 0.951 cluster (+0.0016) needs a non-obvious lever (candidates:
+  combination target encoding, metric-aligned early stopping, pseudo-labeling) — higher effort, lower
+  probability. Paused for a steer.

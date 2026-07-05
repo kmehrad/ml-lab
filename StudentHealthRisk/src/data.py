@@ -17,6 +17,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 PROCESSED = ROOT / "data" / "processed"
+ORIGINAL = ROOT / "data" / "original" / "student_health_dataset_50k.csv"
 
 ID = "id"
 TARGET = "health_condition"
@@ -104,3 +105,17 @@ def load_test() -> pd.DataFrame:
 
 def load_sample_submission() -> pd.DataFrame:
     return pd.read_csv(RAW / "sample_submission.csv")
+
+
+def load_original() -> pd.DataFrame:
+    """The ~50k-row real seed dataset the competition was synthesized from (schema-matched).
+
+    Same 13 feature columns + ``health_condition`` target as the competition; drops the extra
+    ``student_id``/``timestamp`` columns. Used to augment each *training* fold only (never
+    validation/test) via ``train.py --augment``. No caching — it is small and loaded once per run.
+    """
+    df = pd.read_csv(ORIGINAL)
+    df = df.drop(columns=[c for c in ("student_id", "timestamp") if c in df.columns])
+    df[ID] = range(len(df))                       # synthetic id (original rows never hit submission)
+    _assert_schema(df, train=True)
+    return _typed(df)
