@@ -25,6 +25,15 @@ Submit only after CV review + approval. Naive floor (predict 3 most-frequent cla
 | exp-016 | 2026-07-04 | XGB TE depth-4 × 3-seed average | 0.35511 | — | 0.35140 ± 0.00076 (per-seed) | +0.0039 vs single-seed (0.35118). XGB less seed-sensitive than the NN but still lifts. Saved `xgb_te2_d4_s3`. |
 | exp-017 | 2026-07-04 | **Hill-climb ensemble (NN_s10 + XGB_s3)** | **0.35775** | **0.35776** | — | **SUBMITTED — best result. Public 0.35776 / private 0.35770.** Greedy proba-average = 0.667·nn_te2_s10 + 0.333·xgb_te2_d4_s3. **CV↔LB gap ≈ 0** (OOF 0.35775 → public 0.35776). **+0.01374 public / +0.01220 private vs the prior blend (0.34402/0.34550).** Saved `ensemble`. |
 
+### Push toward 0.36 (branch `experiment/fertilizer-ensemble-036`) — plateaued ~0.358, not submitted
+Added 2 more seed-averaged NN architectures for ensemble diversity: **nn_te2b_s10** (wider 1024-512-256,
+dropout 0.4) OOF 0.35729; **nn_te2c_s10** (deeper 512-512-256-128, lr 8e-4) OOF 0.35688. Hill-climb over
+all 3 NN archs + 3 XGBs → **0.35793** (+0.00018 vs the submitted 0.35775 — within noise, not resubmitted).
+**Level-2 stacking (`src/stack.py`, MLP meta-learner) HURT: 0.35643** — base models are all on the same
+order-2 TE, too correlated for a nonlinear stacker to help. Conclusion: single models cap ~0.357 and the
+ensemble caps ~0.358 (per-column TE signal is weak); reaching 0.36 would need many more seeds (winner used
+~100 NNs) and/or a decorrelated feature set. Diminishing returns — stopped here.
+
 ## Step 5 verdict (blend)
 - **Probability-average > rank-average for MAP@3.** Contrary to the sibling rank-average preference:
   MAP@3 ranks the 7 classes *within each row*, and per-column rank-normalising across the dataset

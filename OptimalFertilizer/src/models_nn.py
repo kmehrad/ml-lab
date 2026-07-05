@@ -95,7 +95,8 @@ def _train_fold(Xtr, ytr, Xva, yva, Xte, seed, epochs=80, bs=4096, lr=1e-3,
 
 
 def run_cv(sample=None, n_splits=5, tag="", te_order=2, te_m=0.0, te_original=True,
-           seeds=1, seed_base=42, epochs=80) -> dict:
+           seeds=1, seed_base=42, epochs=80, hidden=(512, 256, 128), dropout=0.3,
+           lr=1e-3) -> dict:
     import cupy as cp
     df = D.load_train()
     if sample:
@@ -128,7 +129,8 @@ def run_cv(sample=None, n_splits=5, tag="", te_order=2, te_m=0.0, te_original=Tr
             Xtr = cp.hstack([num[tr], Xtr_te])
             Xva = cp.hstack([num[va], Xva_te])
             Xte = cp.hstack([num_test, Xte_te]) if Xte_te is not None else None
-            va_proba, te_proba, ep = _train_fold(Xtr, y[tr], Xva, y[va], Xte, seed, epochs=epochs)
+            va_proba, te_proba, ep = _train_fold(Xtr, y[tr], Xva, y[va], Xte, seed, epochs=epochs,
+                                                 lr=lr, hidden=hidden, dropout=dropout)
             oof_s[va] = va_proba
             if test_proba is not None:
                 test_proba += te_proba / (n_splits * n_avg)
@@ -173,6 +175,10 @@ if __name__ == "__main__":
     p.add_argument("--seeds", type=int, default=1)
     p.add_argument("--seed-base", type=int, default=42)
     p.add_argument("--epochs", type=int, default=80)
+    p.add_argument("--hidden", default="512,256,128", help="comma-separated MLP hidden sizes")
+    p.add_argument("--dropout", type=float, default=0.3)
+    p.add_argument("--lr", type=float, default=1e-3)
     a = p.parse_args()
     run_cv(a.sample, a.folds, tag=a.tag, te_order=a.te_order, te_m=a.te_m,
-           te_original=not a.no_te_original, seeds=a.seeds, seed_base=a.seed_base, epochs=a.epochs)
+           te_original=not a.no_te_original, seeds=a.seeds, seed_base=a.seed_base, epochs=a.epochs,
+           hidden=tuple(int(h) for h in a.hidden.split(",")), dropout=a.dropout, lr=a.lr)
