@@ -128,6 +128,7 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
         for c in cats:
             levels = pd.unique(pd.concat([df[c].astype("object"), test[c].astype("object")],
                                          ignore_index=True))
+            levels = [lv for lv in levels if pd.notna(lv)]   # NaN stays a NaN value, not a category
             dtype = pd.CategoricalDtype(categories=levels)
             df[c] = df[c].astype("object").astype(dtype)
             test[c] = test[c].astype("object").astype(dtype)

@@ -42,6 +42,7 @@ def _design_matrix(train_df: pd.DataFrame, test_df: pd.DataFrame | None, groups)
     frames = [train_df] + ([test_df] if test_df is not None else [])
     for c in cat:  # shared categories so get_dummies yields identical columns
         levels = pd.unique(pd.concat([f[c].astype("object") for f in frames], ignore_index=True))
+        levels = [lv for lv in levels if pd.notna(lv)]   # NaN handled by get_dummies(dummy_na=True)
         for f in frames:
             f[c] = f[c].astype("object").astype(pd.CategoricalDtype(categories=levels))
 
