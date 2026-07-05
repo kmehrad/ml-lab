@@ -87,7 +87,7 @@ def _train_fold(Xtr, ytr, Xva, yva, Xte, class_w, seed, device,
     yva_t = torch.as_tensor(yva, dtype=torch.long, device=device)
     w_t = torch.as_tensor(class_w, dtype=torch.float32, device=device)
 
-    model = _mlp(Xtr.shape[1], dropout=dropout).to(device)
+    model = _mlp(Xtr.shape[1], p=dropout).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     n = Xtr_t.shape[0]
     best_ll, best_state, bad = float("inf"), None, 0

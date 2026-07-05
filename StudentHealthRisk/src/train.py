@@ -85,7 +85,10 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
                 callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)])
         bi = est.best_iteration_
     elif model == "xgb":
-        est.fit(Xtr, ytr, eval_set=[(Xva, yva)], verbose=False)
+        # XGBoost has no class_weight param; pass balanced per-sample weights to match lgbm/cat.
+        counts = np.bincount(ytr, minlength=N_CLASSES).astype(np.float64)
+        cw = len(ytr) / (N_CLASSES * np.clip(counts, 1, None))
+        est.fit(Xtr, ytr, sample_weight=cw[ytr], eval_set=[(Xva, yva)], verbose=False)
         bi = est.best_iteration
     elif model == "cat":
         # CatBoost wants categoricals as plain strings with no NaN; fill and cast.

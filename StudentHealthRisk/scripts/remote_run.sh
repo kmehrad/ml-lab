@@ -20,6 +20,10 @@ set -euo pipefail
 BOX="${SHR_BOX:-kamron@192.168.0.92}"
 REMOTE_DIR="${SHR_REMOTE_DIR:-StudentHealthRisk}"     # relative to the box user's ~
 LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The box authenticates with the passphrase-less `dragon` key; use it directly so this works in a
+# fresh shell (no ssh-agent needed). Override with SHR_SSH_KEY.
+SSH_KEY="${SHR_SSH_KEY:-$HOME/.ssh/dragon}"
+SSH="ssh -i $SSH_KEY -o ConnectTimeout=10"
 
 # Files/dirs never worth shipping. Code + data/{raw,original} + artifacts DO sync.
 RSYNC_EXCLUDES=(--exclude '.venv' --exclude '.git' --exclude '__pycache__'
@@ -28,23 +32,23 @@ RSYNC_EXCLUDES=(--exclude '.venv' --exclude '.git' --exclude '__pycache__'
 
 push() {
   echo ">> push code+data -> $BOX:~/$REMOTE_DIR"
-  rsync -az --delete "${RSYNC_EXCLUDES[@]}" \
+  rsync -az -e "$SSH" --delete "${RSYNC_EXCLUDES[@]}" \
     --exclude 'experiments/artifacts' \
     "$LOCAL_DIR/" "$BOX:$REMOTE_DIR/"
   # artifacts synced without --delete so box-side results are never clobbered by the Mac
-  rsync -az "$LOCAL_DIR/experiments/artifacts/" "$BOX:$REMOTE_DIR/experiments/artifacts/" 2>/dev/null || true
+  rsync -az -e "$SSH" "$LOCAL_DIR/experiments/artifacts/" "$BOX:$REMOTE_DIR/experiments/artifacts/" 2>/dev/null || true
 }
 
 run() {
   echo ">> run on $BOX: $*"
-  ssh "$BOX" "bash -lc 'cd $REMOTE_DIR && source .venv/bin/activate && $*'"
+  $SSH "$BOX" "bash -lc 'cd $REMOTE_DIR && source .venv/bin/activate && $*'"
 }
 
 pull() {
   echo ">> pull artifacts+outputs <- $BOX"
   mkdir -p "$LOCAL_DIR/experiments/artifacts" "$LOCAL_DIR/outputs"
-  rsync -az "$BOX:$REMOTE_DIR/experiments/artifacts/" "$LOCAL_DIR/experiments/artifacts/"
-  rsync -az "$BOX:$REMOTE_DIR/outputs/" "$LOCAL_DIR/outputs/" 2>/dev/null || true
+  rsync -az -e "$SSH" "$BOX:$REMOTE_DIR/experiments/artifacts/" "$LOCAL_DIR/experiments/artifacts/"
+  rsync -az -e "$SSH" "$BOX:$REMOTE_DIR/outputs/" "$LOCAL_DIR/outputs/" 2>/dev/null || true
 }
 
 cmd="${1:-}"; shift || true
