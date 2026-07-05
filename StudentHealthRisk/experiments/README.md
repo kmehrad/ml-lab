@@ -25,7 +25,10 @@ above-fold-noise gains.
 | 015 | 2026-07-05 | **Lever 2b** xgb tree-count sweep (metric-aligned) | base | **0.94994** @800t | — | — | — | balanced-acc peaks at ~800 trees (t400 .94980, t800 .94994, t1200 .94989, t1600 .94981) vs 2000t .94972. Log-loss ES over-trains. **New best single.** |
 | 016 | 2026-07-05 | lgbm 800 trees | base | 0.94976 | 0.94945 | — | — | +0.0002 vs 2000t — tree-count win generalizes to lgbm. |
 | 017 | 2026-07-05 | cat 1000 trees | base | 0.94916 | — | — | — | worse than cat auto-ES (0.94928); cat already stops well. Keep cat baseline. |
-| 018 | 2026-07-05 | blend/hillclimb fewer-tree roster | base | 0.94998 | — | — | — | blend(xgb_t800,lgbm_t800,cat)=0.94989; hillclimb xgb_t800+lgbm_t800=0.94998. Still GBDT-correlated. |
+| 018 | 2026-07-05 | blend/hillclimb fewer-tree roster | base | **0.94998** | — | — | — | blend(xgb_t800,lgbm_t800,cat)=0.94989; hillclimb xgb_t800+lgbm_t800=0.94998. Still GBDT-correlated. **Best.** |
+| 019 | 2026-07-05 | **Lever 4** TE order-2: lgbm / xgb | base+TE | 0.94938 / 0.94967 | — | — | — | **REJECT** below non-TE counterparts; 3-level cats + binned numerics already captured by trees. |
+| 020 | 2026-07-05 | **Lever 5** hillclimb 6-model diverse roster | base(+TE,NN) | 0.94998 | — | — | — | TE/NN learners not selected — no diversity value; picks xgb_t800+lgbm_t800 again. |
+| 021 | 2026-07-05 | **Pseudo-labeling** (177k confident test rows) | base | 0.94968 | 0.94954 | — | — | **REJECT** −0.0003; confident self-labels reinforce known patterns, add noise. |
 
 ## Verdicts / narrative
 
@@ -56,3 +59,12 @@ above-fold-noise gains.
   plateau is robust; reaching the 0.951 cluster (+0.0016) needs a non-obvious lever (candidates:
   combination target encoding, metric-aligned early stopping, pseudo-labeling) — higher effort, lower
   probability. Paused for a steer.
+- **Improvement phase conclusion (exp-015..021).** Only one lever produced a real gain: **metric-aligned
+  tree count** — balanced accuracy peaks at ~800 trees (log-loss early stopping over-trains), lifting the
+  best blend from 0.94979 → **0.94998 OOF** (xgb_t800 + lgbm_t800). Everything else is dead: target
+  encoding (−, features already captured), diverse ensembling (TE/NN add no decorrelation), and
+  pseudo-labeling (−, self-labels reinforce known patterns). **Net honest gain ≈ +0.0002.** We did **not**
+  reach the 0.951 LB cluster (+0.0016 away). The label is near-deterministic in a few raw features, so the
+  standard playbook is genuinely exhausted; the cluster's extra signal is a non-obvious trick this
+  investigation did not find. Recommended action: submit the xgb_t800+lgbm_t800 blend for a small
+  confirmed LB gain, and treat ~0.9497 as the practical ceiling for this approach.

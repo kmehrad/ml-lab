@@ -3,8 +3,23 @@
 - **Task:** 3-class classification of `health_condition` (imbalanced 86/8/6). **Metric:** Balanced
   Accuracy Score (mean per-class recall). Decision-sensitive → predict probabilities, tune per-class
   decision weights on OOF (`metric.tune_weights`), apply to test.
-- **Best OOF (tuned):** **0.94979** — equal-weight 3-GBDT blend (lgbm + xgb + cat).
-- **Public LB:** **0.94953** (CV↔LB gap −0.00026 — within fold noise; CV tracks the leaderboard).
+- **Best OOF (tuned):** **0.94998** — xgb + lgbm blend at 800 trees (metric-aligned tree count).
+- **Public LB:** **0.94953** (first submission, 3-GBDT blend). Improved blend pending submit.
+
+## Improvement phase (target 0.95, top LB cluster ~0.951)
+Systematically tested six levers; **only metric-aligned tree count helped** (+0.0002):
+- ✅ **Tree count** — balanced accuracy peaks at ~800 trees, not the log-loss early-stopping cap;
+  xgb 0.94972→**0.94994**, blend →**0.94998**.
+- ❌ **Original-data augmentation** — real seed rows are complete, synthetic data is missing-heavy →
+  off-distribution (−0.0002..−0.0005 on all GBDTs).
+- ❌ **Combination target encoding** — 3-level cats + binned numerics already captured by trees.
+- ❌ **Decision-rule refinement** — coordinate-ascent already global-optimal.
+- ❌ **Diverse ensembling** — TE/NN learners add no decorrelation; hillclimb ignores them.
+- ❌ **Pseudo-labeling** — confident self-labels reinforce known patterns, add noise.
+
+**Conclusion:** the label is near-deterministic in a few raw features (0 label conflicts), so GBDTs
+saturate at **~0.9497–0.9500**. We did not reach the 0.951 cluster (+0.0016); its extra signal is a
+non-obvious trick this pass did not find. ~0.9497 is the practical ceiling for this approach.
 
 ## Base learners (5-fold OOF, balanced accuracy, tuned)
 
