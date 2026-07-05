@@ -4,7 +4,7 @@
   Accuracy Score (mean per-class recall). Decision-sensitive → predict probabilities, tune per-class
   decision weights on OOF (`metric.tune_weights`), apply to test.
 - **Best OOF (tuned):** **0.94979** — equal-weight 3-GBDT blend (lgbm + xgb + cat).
-- **Best public LB:** _pending submission approval._
+- **Public LB:** **0.94953** (CV↔LB gap −0.00026 — within fold noise; CV tracks the leaderboard).
 
 ## Base learners (5-fold OOF, balanced accuracy, tuned)
 
