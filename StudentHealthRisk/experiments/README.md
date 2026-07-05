@@ -22,6 +22,10 @@ above-fold-noise gains.
 | 012 | 2026-07-05 | **Lever 2** xgb trees=8000 lr=0.015 | base | 0.94903 | 0.94444 | — | — | **REJECT** −0.0007. best_iter=cap → early stop (log-loss) misaligned with balanced acc; more trees overfit log-loss. |
 | 013 | 2026-07-05 | Lever 2 cat trees=8000 lr=0.015 | base | 0.94930 | 0.94922 | — | — | flat (early-stop fired ~3000); 2000-tree default already optimal. |
 | 014 | 2026-07-05 | **Lever 3** decision-rule global opt + per-fold | base | 0.94980 | — | — | — | no headroom: coord-ascent already global optimum; honest per-fold 0.94959 ≈ LB 0.94953. |
+| 015 | 2026-07-05 | **Lever 2b** xgb tree-count sweep (metric-aligned) | base | **0.94994** @800t | — | — | — | balanced-acc peaks at ~800 trees (t400 .94980, t800 .94994, t1200 .94989, t1600 .94981) vs 2000t .94972. Log-loss ES over-trains. **New best single.** |
+| 016 | 2026-07-05 | lgbm 800 trees | base | 0.94976 | 0.94945 | — | — | +0.0002 vs 2000t — tree-count win generalizes to lgbm. |
+| 017 | 2026-07-05 | cat 1000 trees | base | 0.94916 | — | — | — | worse than cat auto-ES (0.94928); cat already stops well. Keep cat baseline. |
+| 018 | 2026-07-05 | blend/hillclimb fewer-tree roster | base | 0.94998 | — | — | — | blend(xgb_t800,lgbm_t800,cat)=0.94989; hillclimb xgb_t800+lgbm_t800=0.94998. Still GBDT-correlated. |
 
 ## Verdicts / narrative
 

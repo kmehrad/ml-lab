@@ -110,9 +110,28 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
     return va_proba, te_proba, bi
 
 
+def _fit_predict_numeric(model, est, Xtr, ytr, Xva, yva, Xte):
+    """Early-stopped fit on dense numeric arrays (target-encoding path — no categorical dtype)."""
+    if model == "xgb":
+        counts = np.bincount(ytr, minlength=N_CLASSES).astype(np.float64)
+        cw = len(ytr) / (N_CLASSES * np.clip(counts, 1, None))
+        est.fit(Xtr, ytr, sample_weight=cw[ytr], eval_set=[(Xva, yva)], verbose=False)
+        bi = est.best_iteration
+    elif model == "lgbm":
+        import lightgbm as lgb
+        est.fit(Xtr, ytr, eval_set=[(Xva, yva)],
+                callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)])
+        bi = est.best_iteration_
+    else:
+        raise ValueError(f"TE path supports lgbm/xgb, not {model}")
+    va_proba = _align_proba(est, est.predict_proba(Xva))
+    te_proba = _align_proba(est, est.predict_proba(Xte)) if Xte is not None else None
+    return va_proba, te_proba, bi
+
+
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            groups=("base",), tag: str = "", device: str = "cpu",
-           seeds: int = 1, seed_base: int = 42, augment: bool = False,
+           seeds: int = 1, seed_base: int = 42, augment: bool = False, te_order: int = 0, te_m: float = 20.0,
            depth: int | None = None, trees: int | None = None, lr: float | None = None) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
@@ -154,6 +173,23 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     if augment:
         print(f"augmenting each train fold with {len(orig):,} original real rows")
 
+    # Target-encoding path: dense numerics + categorical codes + per-fold k-fold-OOF combo TE.
+    keys_tr = keys_te = base_dense = base_dense_test = None
+    if te_order:
+        from .target_encoding import combos, build_keys
+        combo_list = combos(te_order)
+        keys_tr = build_keys(df, combo_list)
+        keys_te = build_keys(test, combo_list) if test is not None else None
+        base_dense = np.column_stack(
+            [df[D.NUMERIC].to_numpy(np.float32)]
+            + [df[c].cat.codes.to_numpy().astype(np.float32).reshape(-1, 1) for c in D.CATEGORICAL])
+        if test is not None:
+            base_dense_test = np.column_stack(
+                [test[D.NUMERIC].to_numpy(np.float32)]
+                + [test[c].cat.codes.to_numpy().astype(np.float32).reshape(-1, 1) for c in D.CATEGORICAL])
+        print(f"target encoding: order<={te_order} -> {len(combo_list)} combos x {N_CLASSES} "
+              f"= {len(combo_list) * N_CLASSES} TE features (m={te_m})")
+
     # Seed-averaging (RepeatedKFold): average probabilities across independent (split + estimator)
     # seeds before scoring — a cheap, robust lift when the decision is threshold-sensitive.
     seed_list = [seed_base + s for s in range(max(1, seeds))]
@@ -165,12 +201,22 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
         oof_s = np.zeros((len(df), N_CLASSES))
         for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
             est = build_estimator(model, device=device, seed=seed, depth=depth, trees=trees, lr=lr)
-            Xtr, ytr = X.iloc[tr], y[tr]
-            if augment:  # original rows join TRAIN only — validation stays purely synthetic
-                Xtr = pd.concat([Xtr, Xorig], ignore_index=True)
-                ytr = np.concatenate([ytr, yorig])
-            va_proba, te_proba, bi = _fit_predict(
-                model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats)
+            if te_order:  # dense TE path (leak-safe per-fold combo target encoding)
+                from .target_encoding import build_te_features
+                te_tr, te_va, te_te = build_te_features(
+                    keys_tr.iloc[tr], y[tr], keys_tr.iloc[va], keys_te, m=te_m, seed=seed)
+                Xtr_d = np.hstack([base_dense[tr], te_tr])
+                Xva_d = np.hstack([base_dense[va], te_va])
+                Xte_d = np.hstack([base_dense_test, te_te]) if base_dense_test is not None else None
+                va_proba, te_proba, bi = _fit_predict_numeric(
+                    model, est, Xtr_d, y[tr], Xva_d, y[va], Xte_d)
+            else:
+                Xtr, ytr = X.iloc[tr], y[tr]
+                if augment:  # original rows join TRAIN only — validation stays purely synthetic
+                    Xtr = pd.concat([Xtr, Xorig], ignore_index=True)
+                    ytr = np.concatenate([ytr, yorig])
+                va_proba, te_proba, bi = _fit_predict(
+                    model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats)
             oof_s[va] = va_proba
             if Xte is not None:
                 test_proba += te_proba / (n_splits * n_avg)
@@ -226,7 +272,10 @@ if __name__ == "__main__":
     p.add_argument("--trees", type=int, default=None, help="n_estimators override")
     p.add_argument("--lr", type=float, default=None, help="learning-rate override (default 0.03)")
     p.add_argument("--augment", action="store_true", help="append original real rows to each train fold")
+    p.add_argument("--te-order", type=int, default=0,
+                   help="k-fold OOF target-encode feature combos up to this order (0=off, lgbm/xgb only)")
+    p.add_argument("--te-m", type=float, default=20.0, help="TE Bayesian smoothing weight")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag, device=a.device,
-           seeds=a.seeds, seed_base=a.seed_base, augment=a.augment,
+           seeds=a.seeds, seed_base=a.seed_base, augment=a.augment, te_order=a.te_order, te_m=a.te_m,
            depth=a.depth, trees=a.trees, lr=a.lr)
