@@ -27,6 +27,7 @@ dependencies = [
 # conda env, not here.
 gpu = [
     "torch>=2.2.0",
+    "pytabkit>=1.2.0",   # RealMLP / TabM tabular NNs (src/models_realmlp.py)
 ]
 
 [tool.pytest.ini_options]
