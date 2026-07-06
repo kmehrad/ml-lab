@@ -44,10 +44,25 @@ def build_realmlp(device: str, seed: int, n_cv: int, batch_size: int = 2048,
     return RealMLP_TD_Classifier(**kw)
 
 
+def _oversample(tr: np.ndarray, y: np.ndarray, ratio: float, seed: int) -> np.ndarray:
+    """Upsample minority-class train indices toward the majority count (approximates class weighting,
+    which pytabkit RealMLP doesn't expose). ratio=1.0 → fully balanced; 0.5 → halfway."""
+    rng = np.random.default_rng(seed)
+    cnt = np.bincount(y[tr], minlength=N)
+    target = cnt.max()
+    out = [tr]
+    for c in range(N):
+        idx = tr[y[tr] == c]
+        need = int((target - len(idx)) * ratio)
+        if need > 0 and len(idx) > 0:
+            out.append(rng.choice(idx, size=need, replace=True))
+    return np.concatenate(out)
+
+
 def run_realmlp(sample: int | None = None, n_splits: int = 5, tag: str = "realmlp",
                 seeds: int = 1, seed_base: int = 42, n_cv: int = 1, balanced: bool = True,
                 batch_size: int = 2048, n_epochs: int | None = None,
-                val_metric: str = "1-balanced_accuracy", n_ens: int = 8) -> dict:
+                val_metric: str = "cross_entropy", n_ens: int = 8, oversample: float = 0.0) -> dict:
     # RealMLP forbids NaN in continuous columns, so add missing-indicator flags (missingness carries
     # a little signal — esp. bmi) then median-impute numerics; categoricals keep NaN as an "NA" level.
     groups = ("base", "missflag")
@@ -71,11 +86,8 @@ def run_realmlp(sample: int | None = None, n_splits: int = 5, tag: str = "realml
     Xte = test[feats] if test is not None else None
     test_id = test[D.ID].to_numpy() if test is not None else None
 
-    sw = None
-    if balanced:
-        cnt = np.bincount(y, minlength=N).astype(float)
-        cw = len(y) / (N * np.clip(cnt, 1, None))
-
+    if oversample > 0:
+        print(f"oversampling minority classes toward balance (ratio={oversample})")
     seed_list = [seed_base + s for s in range(max(1, seeds))]
     n_avg = len(seed_list)
     oof = np.zeros((len(df), N))
@@ -86,11 +98,8 @@ def run_realmlp(sample: int | None = None, n_splits: int = 5, tag: str = "realml
         for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
             est = build_realmlp("cuda", seed, n_cv, batch_size=batch_size, n_epochs=n_epochs,
                                 val_metric=val_metric, n_ens=n_ens)
-            kw = {"sample_weight": cw[y[tr]]} if balanced else {}
-            try:
-                est.fit(X.iloc[tr], y[tr], **kw)
-            except TypeError:                              # some versions reject sample_weight kw
-                est.fit(X.iloc[tr], y[tr])
+            tri = _oversample(tr, y, oversample, seed) if oversample > 0 else tr
+            est.fit(X.iloc[tri], y[tri])
             oof[va] += est.predict_proba(X.iloc[va]) / n_avg
             if test_proba is not None:
                 test_proba += est.predict_proba(Xte) / (n_splits * n_avg)
@@ -128,9 +137,11 @@ if __name__ == "__main__":
     p.add_argument("--no-balanced", action="store_true")
     p.add_argument("--batch-size", type=int, default=2048)
     p.add_argument("--n-epochs", type=int, default=None, help="override RealMLP epochs (default ~256)")
-    p.add_argument("--val-metric", default="1-balanced_accuracy", help="RealMLP early-stop/select metric")
+    p.add_argument("--val-metric", default="cross_entropy", help="RealMLP early-stop/select metric")
     p.add_argument("--n-ens", type=int, default=8, help="RealMLP ensemble members")
+    p.add_argument("--oversample", type=float, default=0.0,
+                   help="upsample minority classes toward balance (0=off, 1=full); approximates class weighting")
     a = p.parse_args()
     run_realmlp(a.sample, a.folds, tag=a.tag, seeds=a.seeds, seed_base=a.seed_base,
-                n_cv=a.n_cv, balanced=not a.no_balanced, batch_size=a.batch_size, n_epochs=a.n_epochs,
-                val_metric=a.val_metric, n_ens=a.n_ens)
+                n_cv=a.n_cv, batch_size=a.batch_size, n_epochs=a.n_epochs,
+                val_metric=a.val_metric, n_ens=a.n_ens, oversample=a.oversample)

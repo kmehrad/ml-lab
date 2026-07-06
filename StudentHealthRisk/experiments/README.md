@@ -28,6 +28,8 @@ above-fold-noise gains.
 | 018 | 2026-07-05 | blend xgb_t800+lgbm_t800 (fewer trees) | base | 0.94998 | — | — | **0.94938** | **SUBMITTED — LB REGRESSED** vs the 0.94953 baseline despite higher OOF. The tree-count OOF gain did NOT transfer: it was OOF-overfit noise, not real. |
 | 022 | 2026-07-06 | **RealMLP** (pytabkit, n_cv=1, batch 2048) | base+missflag | 0.94785 | 0.86809 | — | — | Public-notebook lever: strong tabular NN, cross-family diversity. Solo weaker than GBDTs but decorrelated (fixes 5.1% of xgb errors). 12 min GPU. |
 | 023 | 2026-07-06 | blend/stack xgb+lgbm+cat+realmlp | base | 0.94977 / 0.94973 | — | — | — | equal-weight blend 0.94977, LogReg stack 0.94973 — RealMLP too weak solo to help at equal weight. Need stronger RealMLP (n_cv=4) + optimal weighting. |
+| 024 | 2026-07-06 | RealMLP config sweep | base+missflag | 0.94806 best | — | — | — | n_cv=4 cross-entropy 0.94806 (best); n_ens=8 + `1-balanced_accuracy` 0.94606 (metric-aligned ES hurts calibration→worse tuned); oversample=1.0 0.924 (distorts calibration). Decision tuning already handles imbalance best. |
+| 025 | 2026-07-06 | stack/hillclimb GBDTs + best RealMLP | base | stack 0.94968 / blend 0.94982 / HC 0.94986 | — | — | — | **RealMLP REJECTED** — hillclimb ignores it (picks xgb+cat), stack worse, blend marginal. Too weak (0.948 vs GBDT 0.9497); 5% decorrelation insufficient. Best submission stays 3-GBDT blend LB 0.94953. |
 | 019 | 2026-07-05 | **Lever 4** TE order-2: lgbm / xgb | base+TE | 0.94938 / 0.94967 | — | — | — | **REJECT** below non-TE counterparts; 3-level cats + binned numerics already captured by trees. |
 | 020 | 2026-07-05 | **Lever 5** hillclimb 6-model diverse roster | base(+TE,NN) | 0.94998 | — | — | — | TE/NN learners not selected — no diversity value; picks xgb_t800+lgbm_t800 again. |
 | 021 | 2026-07-05 | **Pseudo-labeling** (177k confident test rows) | base | 0.94968 | 0.94954 | — | — | **REJECT** −0.0003; confident self-labels reinforce known patterns, add noise. |
@@ -70,3 +72,14 @@ above-fold-noise gains.
   public LB 0.94953.** The label is near-deterministic in a few raw features → ~0.9495 is the practical
   ceiling; the 0.951 cluster (+0.0016) uses a non-obvious trick this investigation did not find. Chasing
   it further means research, not the standard playbook.
+- **RealMLP phase (exp-022..025) — the public-notebook lever didn't reproduce.** Mining the S6E7
+  notebooks showed the 0.951 cluster = strong tabular NN (RealMLP/TabM) + stacking. Built the RealMLP
+  learner (pytabkit) + an OOF LogReg stacker. But our RealMLP lands **~0.948** across every config tried
+  (n_cv 1–4, n_ens 8, cross-entropy vs `1-balanced_accuracy` early stopping, minority oversampling,
+  batch/epoch) — consistently below the GBDTs (0.9497). It **decorrelates** (fixes ~5% of xgb's errors)
+  but is too weak for that to matter: blend 0.94982, stack 0.94968, and hillclimb **ignores it** (picks
+  xgb+cat). Notes: metric-aligned early stopping and oversampling both *hurt* the tuned score (they trade
+  probability calibration, which our post-hoc decision tuning relies on). The notebook's RealMLP reaches
+  the cluster, so the gap is in RealMLP-specific hyperparameters/preprocessing we didn't match — closing
+  it would mean porting their exact hand-rolled RealMLP, a deep effort with uncertain payoff. **Best
+  submission remains the 3-GBDT blend, LB 0.94953.**
