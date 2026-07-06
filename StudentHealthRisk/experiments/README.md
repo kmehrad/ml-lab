@@ -26,6 +26,8 @@ above-fold-noise gains.
 | 016 | 2026-07-05 | lgbm 800 trees | base | 0.94976 | 0.94945 | — | — | +0.0002 vs 2000t — tree-count win generalizes to lgbm. |
 | 017 | 2026-07-05 | cat 1000 trees | base | 0.94916 | — | — | — | worse than cat auto-ES (0.94928); cat already stops well. Keep cat baseline. |
 | 018 | 2026-07-05 | blend xgb_t800+lgbm_t800 (fewer trees) | base | 0.94998 | — | — | **0.94938** | **SUBMITTED — LB REGRESSED** vs the 0.94953 baseline despite higher OOF. The tree-count OOF gain did NOT transfer: it was OOF-overfit noise, not real. |
+| 022 | 2026-07-06 | **RealMLP** (pytabkit, n_cv=1, batch 2048) | base+missflag | 0.94785 | 0.86809 | — | — | Public-notebook lever: strong tabular NN, cross-family diversity. Solo weaker than GBDTs but decorrelated (fixes 5.1% of xgb errors). 12 min GPU. |
+| 023 | 2026-07-06 | blend/stack xgb+lgbm+cat+realmlp | base | 0.94977 / 0.94973 | — | — | — | equal-weight blend 0.94977, LogReg stack 0.94973 — RealMLP too weak solo to help at equal weight. Need stronger RealMLP (n_cv=4) + optimal weighting. |
 | 019 | 2026-07-05 | **Lever 4** TE order-2: lgbm / xgb | base+TE | 0.94938 / 0.94967 | — | — | — | **REJECT** below non-TE counterparts; 3-level cats + binned numerics already captured by trees. |
 | 020 | 2026-07-05 | **Lever 5** hillclimb 6-model diverse roster | base(+TE,NN) | 0.94998 | — | — | — | TE/NN learners not selected — no diversity value; picks xgb_t800+lgbm_t800 again. |
 | 021 | 2026-07-05 | **Pseudo-labeling** (177k confident test rows) | base | 0.94968 | 0.94954 | — | — | **REJECT** −0.0003; confident self-labels reinforce known patterns, add noise. |

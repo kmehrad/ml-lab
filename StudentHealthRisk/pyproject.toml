@@ -28,6 +28,8 @@ dependencies = [
 gpu = [
     "torch>=2.2.0",
     "pytabkit>=1.2.0",   # RealMLP / TabM tabular NNs (src/models_realmlp.py)
+    "probmetrics",       # + numba: enable RealMLP's '1-balanced_accuracy' early-stopping metric
+    "numba",
 ]
 
 [tool.pytest.ini_options]
