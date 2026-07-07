@@ -3,8 +3,9 @@
 - **Task:** 3-class classification of `health_condition` (imbalanced 86/8/6). **Metric:** Balanced
   Accuracy Score (mean per-class recall). Decision-sensitive → predict probabilities, tune per-class
   decision weights on OOF (`metric.tune_weights`), apply to test.
-- **Best public LB:** **0.94953** — equal-weight 3-GBDT blend (lgbm + xgb + cat), OOF 0.94979. This is
-  the final/best submission.
+- **Best public LB:** **0.94981** — diverse hillclimb ensemble **xgb + TabM + FTT** (⅓ each), OOF 0.94994.
+  The genuine model-family diversity (GBDT + two decorrelated tabular NNs) is the first improvement that
+  transferred to the LB (+0.00028 over the 3-GBDT blend; OOF→LB gap −0.00013). See the TabM/FTT phase below.
 
 ## Improvement phase (target 0.95, top LB cluster ~0.951) — no real gain found
 Systematically tested six levers. All new-signal levers failed on OOF; the one that looked promising
@@ -18,11 +19,21 @@ regressed on the LB:
 - ❌ **Diverse ensembling** — TE/NN learners add no decorrelation; hillclimb ignores them.
 - ❌ **Pseudo-labeling** — confident self-labels reinforce known patterns, add noise.
 
-**Conclusion:** the label is near-deterministic in a few raw features (0 label conflicts), so GBDTs
-saturate at **~0.9495** and the OOF↔LB coupling sits at the ±0.0002 noise floor — no sub-0.001 OOF move
-is trustworthy. We did not reach the 0.951 cluster (+0.0016); its extra signal is a non-obvious trick
-this pass did not find. **~0.9495 is the practical ceiling for this approach; the original 3-GBDT blend
-(0.94953) stands as the best submission.**
+**GBDT-only conclusion:** the label is near-deterministic in a few raw features (0 label conflicts), so
+GBDTs saturate at **~0.9495** and no sub-0.001 *GBDT* OOF move transferred. The 0.951 cluster's extra
+signal is model diversity — see below.
+
+## NN-diversity phase — the breakthrough (LB 0.94953 → 0.94981)
+Mining the public notebooks (LLM-assisted discovery) showed the 0.951 cluster = GBDTs + strong tabular
+NNs + stacking. Built a pytabkit NN zoo (`src/models_realmlp.py --arch ...`):
+- **RealMLP 0.94785** — too weak; every ensemble ignored it. **Rejected.**
+- **TabM 0.94905** and **FTT (FT-Transformer) 0.94911** — near-GBDT solo, *different families*, decorrelated
+  (each fixes ~4–5% of xgb's errors). Both get **selected** by the hillclimb.
+- **Best: hillclimb xgb + TabM + FTT (⅓ each) → OOF 0.94994 → LB 0.94981** (+0.00028, OOF→LB gap −0.00013).
+Lessons: NN strength matters (RealMLP failed, TabM/FTT worked); metric-aligned early stopping and
+oversampling *hurt* (they trade the calibration our decision tuning needs); genuine cross-family diversity
+transfers where single-model OOF fiddling did not. Remaining gap to the 0.951 cluster (~+0.0013) is more/
+stronger diverse learners + stacking — diminishing returns per model.
 
 ## Base learners (5-fold OOF, balanced accuracy, tuned)
 
