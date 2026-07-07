@@ -30,18 +30,26 @@ ART = Path(__file__).resolve().parent.parent / "experiments" / "artifacts"
 N = D.N_CLASSES
 
 
-def build_realmlp(device: str, seed: int, n_cv: int, batch_size: int = 2048,
-                  n_epochs: int | None = None, val_metric: str = "1-balanced_accuracy", n_ens: int = 8):
-    from pytabkit import RealMLP_TD_Classifier
-    # TD = "tuned defaults". Two levers that matter for our imbalanced balanced-accuracy target
-    # (matching the strong public-notebook RealMLP): early-stop / select on **balanced_accuracy**
-    # (not cross-entropy — the model is otherwise majority-biased, raw bal-acc ~0.87), and an
-    # ensemble (`n_ens`, notebook used 8). Larger batch keeps the GPU busy on 690k rows.
-    kw = dict(device=device, random_state=seed, n_cv=n_cv, val_metric_name=val_metric,
-              n_ens=n_ens, batch_size=batch_size)
-    if n_epochs is not None:
-        kw["n_epochs"] = n_epochs
-    return RealMLP_TD_Classifier(**kw)
+_ARCH = {"realmlp": "RealMLP_TD_Classifier", "tabm": "TabM_D_Classifier",
+         "ftt": "FTT_D_Classifier", "tabr": "TabR_S_D_Classifier", "mlp_plr": "MLP_PLR_D_Classifier"}
+
+
+def build_nn(arch: str, device: str, seed: int, n_cv: int, batch_size: int = 2048,
+             n_epochs: int | None = None, val_metric: str = "cross_entropy", n_ens: int = 8):
+    """Build a pytabkit tabular-NN classifier. Kwargs are signature-filtered so architecture-specific
+    params (e.g. RealMLP's `n_ens`, which TabM lacks) are dropped rather than crashing.
+
+    Larger `batch_size` keeps the GPU busy on 690k rows (default tiny batch → ~3 h/run). We early-stop
+    on cross-entropy, not balanced accuracy, because our post-hoc decision tuning needs well-calibrated
+    probabilities (metric-aligned ES hurt the tuned score — exp-024)."""
+    import pytabkit
+    import inspect
+    cls = getattr(pytabkit, _ARCH[arch])
+    want = dict(device=device, random_state=seed, n_cv=n_cv, val_metric_name=val_metric,
+                n_ens=n_ens, batch_size=batch_size, n_epochs=n_epochs)
+    ok = set(inspect.signature(cls.__init__).parameters)
+    kw = {k: v for k, v in want.items() if k in ok and v is not None}
+    return cls(**kw)
 
 
 def _oversample(tr: np.ndarray, y: np.ndarray, ratio: float, seed: int) -> np.ndarray:
@@ -59,8 +67,8 @@ def _oversample(tr: np.ndarray, y: np.ndarray, ratio: float, seed: int) -> np.nd
     return np.concatenate(out)
 
 
-def run_realmlp(sample: int | None = None, n_splits: int = 5, tag: str = "realmlp",
-                seeds: int = 1, seed_base: int = 42, n_cv: int = 1, balanced: bool = True,
+def run_realmlp(arch: str = "realmlp", sample: int | None = None, n_splits: int = 5, tag: str = "realmlp",
+                seeds: int = 1, seed_base: int = 42, n_cv: int = 1,
                 batch_size: int = 2048, n_epochs: int | None = None,
                 val_metric: str = "cross_entropy", n_ens: int = 8, oversample: float = 0.0) -> dict:
     # RealMLP forbids NaN in continuous columns, so add missing-indicator flags (missingness carries
@@ -96,8 +104,8 @@ def run_realmlp(sample: int | None = None, n_splits: int = 5, tag: str = "realml
     t0 = time.time()
     for seed in seed_list:
         for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
-            est = build_realmlp("cuda", seed, n_cv, batch_size=batch_size, n_epochs=n_epochs,
-                                val_metric=val_metric, n_ens=n_ens)
+            est = build_nn(arch, "cuda", seed, n_cv, batch_size=batch_size, n_epochs=n_epochs,
+                           val_metric=val_metric, n_ens=n_ens)
             tri = _oversample(tr, y, oversample, seed) if oversample > 0 else tr
             est.fit(X.iloc[tri], y[tri])
             oof[va] += est.predict_proba(X.iloc[va]) / n_avg
@@ -108,40 +116,40 @@ def run_realmlp(sample: int | None = None, n_splits: int = 5, tag: str = "realml
             print(f"  seed {seed} fold {k}: bal_acc(raw)={s:.5f}")
 
     raw = score_proba(y, oof); w = tune_weights(y, oof); tuned = score_proba(y, oof, w)
-    res = {"model": "realmlp", "tag": tag, "oof_bacc_raw": float(raw), "oof_bacc_tuned": float(tuned),
+    res = {"model": arch, "tag": tag, "oof_bacc_raw": float(raw), "oof_bacc_tuned": float(tuned),
            "decision_weights": [float(x) for x in w], "fold_mean_raw": float(np.mean(fold_scores)),
            "fold_std_raw": float(np.std(fold_scores)), "seeds": n_avg, "n_cv": n_cv,
            "elapsed_s": round(time.time() - t0, 1)}
-    print(f"\nOOF balanced accuracy: raw {raw:.5f}  tuned {tuned:.5f}  ({res['elapsed_s']}s)")
+    print(f"\n[{arch}] OOF balanced accuracy: raw {raw:.5f}  tuned {tuned:.5f}  ({res['elapsed_s']}s)")
 
     if not sample:
         ART.mkdir(parents=True, exist_ok=True)
-        suf = f"_{tag}" if tag else ""
-        np.save(ART / f"realmlp{suf}_oof.npy", oof)
-        np.save(ART / f"realmlp{suf}_test.npy", test_proba)
+        prefix = tag or arch                          # artifact prefix (avoid the doubled-name trap)
+        np.save(ART / f"{prefix}_oof.npy", oof)
+        np.save(ART / f"{prefix}_test.npy", test_proba)
         np.save(ART / "y.npy", y); np.save(ART / "classes.npy", np.array(D.CLASSES, dtype=object))
         np.save(ART / "test_id.npy", test_id)
-        (ART / f"realmlp{suf}_metrics.json").write_text(json.dumps(res, indent=2))
-        print(f"saved -> realmlp{suf}_oof.npy / _test.npy / _metrics.json")
+        (ART / f"{prefix}_metrics.json").write_text(json.dumps(res, indent=2))
+        print(f"saved -> {prefix}_oof.npy / _test.npy / _metrics.json")
     return res
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
+    p.add_argument("--arch", default="realmlp", choices=list(_ARCH), help="pytabkit NN architecture")
     p.add_argument("--sample", type=int, default=None)
     p.add_argument("--folds", type=int, default=5)
-    p.add_argument("--tag", default="realmlp")
+    p.add_argument("--tag", default="")
     p.add_argument("--seeds", type=int, default=1)
     p.add_argument("--seed-base", type=int, default=42)
-    p.add_argument("--n-cv", type=int, default=4, help="internal RealMLP bagging members")
-    p.add_argument("--no-balanced", action="store_true")
+    p.add_argument("--n-cv", type=int, default=1, help="internal CV bagging members")
     p.add_argument("--batch-size", type=int, default=2048)
-    p.add_argument("--n-epochs", type=int, default=None, help="override RealMLP epochs (default ~256)")
-    p.add_argument("--val-metric", default="cross_entropy", help="RealMLP early-stop/select metric")
-    p.add_argument("--n-ens", type=int, default=8, help="RealMLP ensemble members")
+    p.add_argument("--n-epochs", type=int, default=None, help="override epochs (default ~256)")
+    p.add_argument("--val-metric", default="cross_entropy", help="early-stop/select metric")
+    p.add_argument("--n-ens", type=int, default=8, help="RealMLP ensemble members (ignored by archs without it)")
     p.add_argument("--oversample", type=float, default=0.0,
                    help="upsample minority classes toward balance (0=off, 1=full); approximates class weighting")
     a = p.parse_args()
-    run_realmlp(a.sample, a.folds, tag=a.tag, seeds=a.seeds, seed_base=a.seed_base,
+    run_realmlp(a.arch, a.sample, a.folds, tag=a.tag, seeds=a.seeds, seed_base=a.seed_base,
                 n_cv=a.n_cv, batch_size=a.batch_size, n_epochs=a.n_epochs,
                 val_metric=a.val_metric, n_ens=a.n_ens, oversample=a.oversample)
