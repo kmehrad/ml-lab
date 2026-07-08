@@ -10,8 +10,12 @@ mean) = **18.92**. Full per-run log in `experiments/README.md`.
 | XGBoost | **8.75063** | ±0.01336 | 89s | Best single. |
 | LightGBM | 8.75118 | ±0.01324 | 189s | ≈ tied (Δ0.0006 < fold std). |
 | CatBoost | 8.76904 | ±0.01274 | 894s | Weakest + slowest; hit the 3000-iter cap (under-trained). |
-| **Blend avg(lgbm, xgb)** | **8.74171** | — | — | **Best. −0.0089 vs xgb.** Candidate submission. |
+| **Blend avg(lgbm, xgb)** | **8.74171** | — | — | **Best. −0.0089 vs xgb. SUBMITTED → public LB 8.70275 / private 8.73109.** |
 | Blend avg(lgbm, xgb, cat) | 8.74216 | — | — | Rejected — cat drags it (+0.0004). |
+
+**Submitted (exp-004):** avg(lgbm, xgb) → **public LB 8.70275 / private 8.73109** (OOF 8.74171). LB is a
+touch *better* than OOF (public −0.039), so CV↔LB tracks well on this clean data. Top public LB ~8.57 →
+~0.13 headroom for the next levers below.
 
 ## Read
 - Folds are extremely tight (±0.013) and there is no train/test drift, so CV should track the LB well.
