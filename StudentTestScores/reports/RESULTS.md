@@ -24,9 +24,31 @@ touch *better* than OOF (public −0.039), so CV↔LB tracks well on this clean 
 - Candidate submission: `outputs/blend_submission.csv` (270,000 rows, `id,exam_score`, clipped to
   [19.6, 100], mean 62.52). **Not uploaded — pending CV review/approval.**
 
-## Next levers (each gated on OOF RMSE)
-- Give CatBoost more trees / higher lr so it early-stops, then re-test whether it adds blend diversity.
-- Light per-model tuning (depth, lr, leaves) on xgb/lgbm.
-- `ratios` feature group (`study_hours × class_attendance`, `study_hours / sleep_hours`) — plausible on
-  this high-signal data, but trees may already capture it; adopt only if OOF improves.
-- Seed-averaging the GBDTs for a small stability gain.
+## Quick GBDT improvement round (2026-07-08) — null result
+Tried every lever from the list below on the remote RTX 3090 Ti box (`scripts/remote_run.sh`) plus
+local Mac CPU. Full numbers in `experiments/README.md` (exp-006..016). Summary:
+
+| Lever | Best variant OOF | vs. its baseline | Verdict |
+|---|---:|---:|---|
+| CatBoost, 8000 trees (fixes early-stop) | 8.77680 | worse (was 8.76904) | reject |
+| XGBoost depth 7/8 | 8.75361 / 8.75483 | worse (was 8.75063) | reject |
+| XGBoost lr 0.02/0.05 | 8.74953 / 8.75404 | +0.0011 / worse | within noise |
+| XGBoost base+ratios | 8.75559 | worse | reject |
+| LightGBM depth 7/8 | 8.75077 / 8.75318 | ~tied / worse (was 8.75118) | within noise |
+| LightGBM lr 0.02/0.05 | 8.74891 / 8.75565 | +0.0023 / worse | within noise |
+| Reblend lgbm(lr02) + xgb(lr02) | **8.74112** | −0.00059 vs submitted blend (8.74171) | **noise, not adopted** |
+
+**No lever cleared the noise bar** (fold std ≈ ±0.013; the accepted exp-004 blend gain was −0.0089, an
+order of magnitude larger than anything found here). Depth increases and the `ratios` group actively
+hurt — this high-signal synthetic data is already well-fit by the vanilla-default GBDTs. **Decision: no
+resubmission.** The exp-004 blend (public LB 8.70275 / private 8.73109) remains the best and only
+submission. Closing the remaining ~0.13 RMSE gap to the top of the leaderboard (~8.57) would need a
+fundamentally different lever — a non-tree model for blend diversity, stacking, or a much larger
+hyperparameter search — not incremental GBDT tuning.
+
+## Next levers (previously proposed — now resolved, see above)
+- ~~Give CatBoost more trees / higher lr so it early-stops~~ — tried, worse.
+- ~~Light per-model tuning (depth, lr, leaves) on xgb/lgbm~~ — tried, within noise or worse.
+- ~~`ratios` feature group~~ — tried, worse.
+- Seed-averaging the GBDTs — not tried this round (skipped once steps 1–3 showed no OOF room per the
+  approved plan's decision gate); low priority given the lr-tuned variants were themselves noise-level.

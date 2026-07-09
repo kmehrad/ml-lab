@@ -12,3 +12,16 @@ Submit only after CV review + approval. Naive floor (predict the train mean ≈ 
 | exp-003 | 2026-07-07 | CatBoost | 8.76904 | — | 8.76903 ± 0.01274 | Baseline, RMSE loss, depth 6, lr 0.03. **Hit the 3000-iter cap on every fold (no early stop) → under-trained**, weakest (+0.018 vs xgb) and slowest (894s). Candidate to drop or give more trees. |
 | exp-004 | 2026-07-07 | Blend avg(lgbm, xgb) | **8.74171** | **8.70275** | — | **Best. −0.00892 vs xgb** (systematic across full OOF; well beyond the blend's own noise). Equal-weight mean of the two GBDT prediction vectors. Saved as `blend`. **SUBMITTED: public LB 8.70275 / private 8.73109** — LB *better* than OOF (public −0.039, private −0.011); clean data, CV↔LB tracks well. Top LB ~8.57 → ~0.13 headroom. |
 | exp-005 | 2026-07-07 | Blend avg(lgbm, xgb, cat) | 8.74216 | — | — | **Rejected (+0.00045 vs 2-model blend).** Weak, under-trained CatBoost adds no useful diversity and drags the average a hair. Confirms dropping cat. |
+| exp-006 | 2026-07-08 | CatBoost, 8000 trees, GPU | 8.77680 | — | 8.77679 ± 0.01287 | **Rejected.** Fixed the under-training (`best_iter` now 6079–6758, no longer hits the cap) but OOF is *worse* than the capped 3000-tree run (8.76904) — the extra trees overfit past the earlier plateau. |
+| exp-007 | 2026-07-08 | XGBoost depth=7 | 8.75361 | — | 8.75360 ± 0.01342 | **Rejected.** Worse than depth=6 baseline. |
+| exp-008 | 2026-07-08 | XGBoost depth=8 | 8.75483 | — | 8.75482 ± 0.01264 | **Rejected.** Worse. |
+| exp-009 | 2026-07-08 | XGBoost lr=0.02 | 8.74953 | — | 8.74952 ± 0.01325 | +0.0011 vs xgb baseline — within fold noise (±0.013). |
+| exp-010 | 2026-07-08 | XGBoost lr=0.05 | 8.75404 | — | 8.75403 ± 0.01341 | **Rejected.** Worse. |
+| exp-011 | 2026-07-08 | XGBoost base+ratios | 8.75559 | — | 8.75558 ± 0.01271 | **Rejected.** Worse than base-only xgb — confirms trees already capture `study_hours×class_attendance` etc.; the extra columns just add overfit surface. |
+| exp-012 | 2026-07-08 | LightGBM depth=7 | 8.75077 | — | 8.75077 ± 0.01310 | ≈ tied with baseline (Δ−0.0004) — within noise. |
+| exp-013 | 2026-07-08 | LightGBM depth=8 | 8.75318 | — | 8.75317 ± 0.01322 | **Rejected.** Worse. |
+| exp-014 | 2026-07-08 | LightGBM lr=0.02 | 8.74891 | — | 8.74890 ± 0.01313 | +0.0023 vs lgbm baseline — within fold noise. |
+| exp-015 | 2026-07-08 | LightGBM lr=0.05 | 8.75565 | — | 8.75564 ± 0.01292 | **Rejected.** Worse. |
+| exp-016 | 2026-07-08 | Blend avg(lgbm lr02, xgb lr02) | 8.74112 | — | — | **Not adopted.** −0.00059 vs the submitted blend (8.74171) — an order of magnitude below the ~0.0089 gain that made exp-004 a real signal; treated as noise, not a genuine improvement. |
+
+**Conclusion of this round (2026-07-08):** every quick GBDT lever (more CatBoost trees, depth/lr tuning on xgb+lgbm, the `ratios` feature group) either hurt OOF or landed inside fold noise. No candidate beat the submitted exp-004 blend by a margin distinguishable from noise, so **no resubmission** — public LB stays at 8.70275. Closing the remaining ~0.13 gap to the top of the leaderboard likely needs a fundamentally different lever (new model family, stacking, or a much larger hyperparameter search) rather than incremental GBDT tuning.
