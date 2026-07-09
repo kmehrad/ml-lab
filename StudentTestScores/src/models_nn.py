@@ -66,7 +66,7 @@ def _mlp(n_in: int, hidden=(256, 128, 64), p: float = 0.2):
 
 
 def _train_fold(Xtr, ytr, Xva, yva, Xte, seed, device,
-                epochs=300, bs=4096, lr=1e-3, patience=20, dropout=0.2):
+                epochs=300, bs=4096, lr=1e-3, patience=20, dropout=0.2, hidden=(256, 128, 64)):
     import torch
     import torch.nn.functional as F
     torch.manual_seed(seed)
@@ -78,7 +78,7 @@ def _train_fold(Xtr, ytr, Xva, yva, Xte, seed, device,
     ytr_t = torch.as_tensor(ytr, dtype=torch.float32, device=device).unsqueeze(1)
     yva_t = torch.as_tensor(yva, dtype=torch.float32, device=device).unsqueeze(1)
 
-    model = _mlp(Xtr.shape[1], p=dropout).to(device)
+    model = _mlp(Xtr.shape[1], hidden=hidden, p=dropout).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     n = Xtr_t.shape[0]
     best_rmse, best_state, bad = float("inf"), None, 0
@@ -109,7 +109,8 @@ def _train_fold(Xtr, ytr, Xva, yva, Xte, seed, device,
 
 
 def run_nn(sample: int | None = None, n_splits: int = 5, groups=("base",), tag: str = "nn",
-           seeds: int = 1, seed_base: int = 42) -> dict:
+           seeds: int = 1, seed_base: int = 42, hidden: tuple[int, ...] = (256, 128, 64),
+           epochs: int = 300, patience: int = 20, dropout: float = 0.2, lr: float = 1e-3) -> dict:
     import torch
     device = "cuda" if torch.cuda.is_available() else "cpu"
     groups = tuple(groups)
@@ -117,7 +118,8 @@ def run_nn(sample: int | None = None, n_splits: int = 5, groups=("base",), tag: 
     if sample:
         df = df.sample(n=min(sample, len(df)), random_state=42).reset_index(drop=True)
     test = add_features(D.load_test(), groups) if not sample else None
-    print(f"NN device={device}  train rows={len(df):,}  features={list(groups)}  tag={tag}")
+    print(f"NN device={device}  train rows={len(df):,}  features={list(groups)}  tag={tag}"
+          f"  hidden={hidden}")
 
     y = df[D.TARGET].to_numpy(dtype=float)
     X, Xte_full = _design_matrix(df, test, groups)
@@ -131,7 +133,9 @@ def run_nn(sample: int | None = None, n_splits: int = 5, groups=("base",), tag: 
     t0 = time.time()
     for seed in seed_list:
         for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
-            va_p, te_p, bi = _train_fold(X[tr], y[tr], X[va], y[va], Xte_full, seed, device)
+            va_p, te_p, bi = _train_fold(X[tr], y[tr], X[va], y[va], Xte_full, seed, device,
+                                         epochs=epochs, lr=lr, patience=patience,
+                                         dropout=dropout, hidden=hidden)
             oof[va] += va_p / n_avg
             if test_pred is not None:
                 test_pred += te_p / (n_splits * n_avg)
@@ -168,5 +172,12 @@ if __name__ == "__main__":
     p.add_argument("--tag", default="nn", help="artifact filename suffix")
     p.add_argument("--seeds", type=int, default=1, help="seed-average over N seeds")
     p.add_argument("--seed-base", type=int, default=42)
+    p.add_argument("--hidden", type=int, nargs="+", default=[256, 128, 64], help="hidden layer sizes")
+    p.add_argument("--epochs", type=int, default=300)
+    p.add_argument("--patience", type=int, default=20)
+    p.add_argument("--dropout", type=float, default=0.2)
+    p.add_argument("--lr", type=float, default=1e-3)
     a = p.parse_args()
-    run_nn(a.sample, a.folds, groups=a.features, tag=a.tag, seeds=a.seeds, seed_base=a.seed_base)
+    run_nn(a.sample, a.folds, groups=a.features, tag=a.tag, seeds=a.seeds, seed_base=a.seed_base,
+           hidden=tuple(a.hidden), epochs=a.epochs, patience=a.patience,
+           dropout=a.dropout, lr=a.lr)
