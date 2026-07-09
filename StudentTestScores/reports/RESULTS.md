@@ -72,11 +72,34 @@ error pattern, which is the signature of an irreducible-noise floor: once the le
 `study_hours`/`class_attendance`/etc. is captured, what's left is largely the same per-row noise for any
 well-fit model. **Decision: no resubmission from this lever either.**
 
-## Overall conclusion — two full improvement rounds, no above-noise gain
-Both the "quick GBDT tuning" round and the "model diversity" round (this session, 2026-07-08) came up
-empty against the noise floor (fold std ≈ ±0.013). **The exp-004 blend remains the best and only
-submission: public LB 8.70275 / private 8.73109.** Reaching the ~0.13 RMSE gap to the top of the
-leaderboard (~8.57) from here would require either a fundamentally different technique (proper stacking
-with a learned meta-model, a much larger hyperparameter search via Optuna) or exploiting structure in the
-synthetic data generator itself (a known meta-strategy on Kaggle Playground series) — both out of scope
-for incremental tuning/blending.
+## Hillclimb ensemble (2026-07-08) — small genuine gain, submitted
+Ran a greedy forward-selection ensemble (`src/hillclimb.py`, mirrors the sibling `StudentHealthRisk`
+pattern, adapted for RMSE) over all 15 model variants produced across both rounds above (baselines +
+tuned GBDTs + CatBoost + NN). It picked 7 models — `lgbm_lgbm_lr02, xgb, lgbm_lgbm_d8, xgb_xgb_ratios,
+xgb_xgb_lr05, lgbm_lgbm_d7, cat` — each equal-weighted (1/7), several of which had *worse* solo OOF than
+the baselines (e.g. `xgb_xgb_ratios`, `xgb_xgb_lr05`) but still contributed useful decorrelated variance.
+
+| Ensemble | OOF RMSE | vs. prior best (8.74171) |
+|---|---:|---:|
+| Lean hillclimb (6 non-cherry-picked candidates) | 8.74105 | −0.00066, noise-level |
+| **Full hillclimb (15 candidates → 7 picked)** | **8.73818** | **−0.00353** |
+
+Before trusting this over a noise-chasing artifact of searching 15 candidates, checked **fold-by-fold**:
+the 7-model ensemble beat the previous blend in *every one* of the 5 folds individually (not just on
+the aggregate), the same "systematic, not lucky" pattern that validated the original exp-004 blend.
+
+**SUBMITTED: public LB 8.70364 / private 8.73083** (vs previous 8.70275 / 8.73109). Public is marginally
+*worse* (+0.00089), private marginally *better* (−0.00026) — essentially a wash on the leaderboard. This
+is consistent with the OOF gain being real (as the fold-by-fold check showed) but small enough that it's
+within the sampling noise of the smaller public/private LB test splits, which can't cleanly resolve a
+gain of this size the way the full 630k-row OOF can.
+
+## Overall conclusion
+Three improvement rounds this session (GBDT tuning, model diversity, hillclimb ensembling) found one
+small-but-real OOF gain (hillclimb, −0.0035) that did not clearly translate to a better leaderboard score,
+and otherwise came up empty against the noise floor (fold std ≈ ±0.013). **Current best submission:
+hillclimb ensemble, public LB 8.70364 / private 8.73083** (statistically indistinguishable from the prior
+8.70275 / 8.73109). Reaching the ~0.13 RMSE gap to the top of the leaderboard (~8.57) from here would
+require either a fundamentally different technique (proper stacking with a learned meta-model, a much
+larger hyperparameter search via Optuna) or exploiting structure in the synthetic data generator itself
+(a known meta-strategy on Kaggle Playground series) — both out of scope for incremental tuning/blending.
