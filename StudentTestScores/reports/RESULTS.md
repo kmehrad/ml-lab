@@ -52,3 +52,31 @@ hyperparameter search — not incremental GBDT tuning.
 - ~~`ratios` feature group~~ — tried, worse.
 - Seed-averaging the GBDTs — not tried this round (skipped once steps 1–3 showed no OOF room per the
   approved plan's decision gate); low priority given the lr-tuned variants were themselves noise-level.
+
+## Model-diversity round (2026-07-08) — also a null result
+Added a PyTorch MLP (`src/models_nn.py`, one-hot categoricals + standardized numerics, MSE loss) on the
+remote GPU box as a structurally different model family, hoping its errors would decorrelate from the
+GBDTs enough to earn blend weight even at lower standalone accuracy. Full numbers in
+`experiments/README.md` (exp-017..020).
+
+| Variant | OOF RMSE | Read |
+|---|---:|---|
+| MLP, 1 seed | 8.88036 | ~0.13 worse than GBDTs alone. |
+| MLP, wider/deeper (512,256,128) | 8.94619 | No better — not a capacity problem. |
+| MLP, 3-seed average | 8.86402 | Best NN variant, still far off GBDT accuracy. |
+| Best-weight blend (lgbm+xgb+MLP) | 8.74193 | **Still worse than the plain lgbm+xgb blend (8.74171).** |
+
+**Root cause:** MLP residuals correlate ρ≈0.985 with the GBDT residuals — almost as correlated as the two
+GBDTs are with *each other* (ρ≈0.996). A structurally different model still lands on nearly the same
+error pattern, which is the signature of an irreducible-noise floor: once the learnable signal in
+`study_hours`/`class_attendance`/etc. is captured, what's left is largely the same per-row noise for any
+well-fit model. **Decision: no resubmission from this lever either.**
+
+## Overall conclusion — two full improvement rounds, no above-noise gain
+Both the "quick GBDT tuning" round and the "model diversity" round (this session, 2026-07-08) came up
+empty against the noise floor (fold std ≈ ±0.013). **The exp-004 blend remains the best and only
+submission: public LB 8.70275 / private 8.73109.** Reaching the ~0.13 RMSE gap to the top of the
+leaderboard (~8.57) from here would require either a fundamentally different technique (proper stacking
+with a learned meta-model, a much larger hyperparameter search via Optuna) or exploiting structure in the
+synthetic data generator itself (a known meta-strategy on Kaggle Playground series) — both out of scope
+for incremental tuning/blending.
