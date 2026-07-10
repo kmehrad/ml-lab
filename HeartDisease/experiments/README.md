@@ -25,3 +25,19 @@ All three models and every blend combination land within ~0.0002 of each other �
 essentially a 3-way tie, consistent with the EDA read that GBDTs are already close to the
 public-LB ceiling (~0.9553-0.9554) on this high-signal dataset. CatBoost edges out on OOF
 but is ~12x slower than LGBM/XGB for a gain at the noise floor.
+
+## Submission 1 — solo CatBoost (2026-07-10)
+
+User-approved over the 3-way blend (tie on OOF, cat has the edge and is a simpler single
+model). **OOF 0.95547 -> public LB 0.95358 / private LB 0.95513.** Public LB is ~0.0019
+below OOF (larger gap than private's ~0.0003) — plausible public/private split variance on
+a late submission; private tracks OOF closely, which is the more meaningful number here.
+Public LB 0.95358 sits below the live top cluster (~0.9553-0.9554), consistent with the EDA
+read that public-leaderboard notebooks use extra levers (tuning, ensembling, calibration)
+beyond a raw single-model baseline.
+
+**Next options (Step 5, gate on OOF AUC, only submit if genuinely above noise):** light
+per-model tuning (xgb/lgbm didn't hit their tree cap but cat did on 2 folds — more trees
+might help cat specifically); original-data augmentation
+(`ritwikb3/heart-disease-statlog`); EDA-flagged interaction terms
+(`Thallium x Chest pain type`, `ST depression x Slope of ST`).
