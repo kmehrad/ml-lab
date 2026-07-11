@@ -95,7 +95,7 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            groups=("base",), tag: str = "", device: str = "cpu",
            depth: int | None = None, trees: int | None = None,
            augment: bool = False, lr: float | None = None, l2: float | None = None,
-           early_stop: int | None = None) -> dict:
+           early_stop: int | None = None, seed: int = 42) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
     if sample:
@@ -139,12 +139,12 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     oof = np.zeros(len(df))
     fold_scores = []
     t0 = time.time()
-    for k, (tr, va) in enumerate(folds(y, n_splits)):
+    for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
         Xtr, ytr = X.iloc[tr], y[tr]
         if augment:
             Xtr = pd.concat([Xtr, aug_X], ignore_index=True)
             ytr = np.concatenate([ytr, aug_y])
-        est = build_estimator(model, device=device, depth=depth, trees=trees,
+        est = build_estimator(model, device=device, seed=seed, depth=depth, trees=trees,
                                lr=lr, l2=l2, early_stop=early_stop)
         va_pred, te_pred, bi = _fit_predict(
             model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats, early_stop=early_stop)
@@ -193,7 +193,8 @@ if __name__ == "__main__":
     p.add_argument("--lr", type=float, default=None, help="learning rate override")
     p.add_argument("--l2", type=float, default=None, help="l2 regularization override (reg_lambda/l2_leaf_reg)")
     p.add_argument("--early-stop", type=int, default=None, help="early stopping rounds override")
+    p.add_argument("--seed", type=int, default=42, help="CV split + model seed (for seed-averaging)")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag,
            device=a.device, depth=a.depth, trees=a.trees, augment=a.augment,
-           lr=a.lr, l2=a.l2, early_stop=a.early_stop)
+           lr=a.lr, l2=a.l2, early_stop=a.early_stop, seed=a.seed)
