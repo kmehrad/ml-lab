@@ -78,6 +78,47 @@ def load_sample_submission() -> pd.DataFrame:
     return pd.read_csv(RAW / "sample_submission.csv")
 
 
+ORIGINAL_RAW = ROOT / "data" / "original" / "Heart_disease_statlog.csv"
+
+
+def load_original() -> pd.DataFrame:
+    """Load the 270-row UCI Statlog Heart source dataset, remapped onto this competition's
+    schema/encodings for use as training-only augmentation (see ``run_cv``'s ``augment`` arg).
+
+    The Kaggle mirror (`ritwikb3/heart-disease-statlog`) uses 0-indexed Cleveland-style codes
+    for a few columns that this competition encodes 1-indexed/Statlog-style; confirmed by
+    comparing marginal value sets and target-correlation signs against ``data/raw/train.csv``:
+    - ``cp`` 0-3 -> ``Chest pain type`` 1-4 (offset +1)
+    - ``slope`` 0-2 -> ``Slope of ST`` 1-3 (offset +1)
+    - ``thal`` 1/2/3 -> ``Thallium`` 3/6/7 (rank-preserving remap; both have exactly 3 levels)
+    - ``target`` 1 -> `Presence` (positive correlation with cp/oldpeak/ca, negative with
+      thalach, matches the competition's known feature-target signs)
+    """
+    def _load():
+        df = pd.read_csv(ORIGINAL_RAW)
+        df.columns = [c.strip().lstrip("﻿") for c in df.columns]
+        out = pd.DataFrame({
+            "Age": df["age"],
+            "Sex": df["sex"],
+            "Chest pain type": df["cp"] + 1,
+            "BP": df["trestbps"],
+            "Cholesterol": df["chol"],
+            "FBS over 120": df["fbs"],
+            "EKG results": df["restecg"],
+            "Max HR": df["thalach"],
+            "Exercise angina": df["exang"],
+            "ST depression": df["oldpeak"],
+            "Slope of ST": df["slope"] + 1,
+            "Number of vessels fluro": df["ca"],
+            "Thallium": df["thal"].map({1: 3, 2: 6, 3: 7}),
+            TARGET: df["target"].map({1: POSITIVE_LABEL, 0: NEGATIVE_LABEL}),
+        })
+        assert out["Thallium"].isna().sum() == 0, "unmapped thal level"
+        _assert_schema(out.assign(**{ID: range(len(out))}), train=True)
+        return out
+    return _cached("original", _load)
+
+
 def encode_target(df: pd.DataFrame) -> pd.Series:
     """Map the string target to ``y = 1`` for Presence, ``0`` for Absence."""
     return (df[TARGET] == POSITIVE_LABEL).astype(int)

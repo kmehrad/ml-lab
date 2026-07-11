@@ -3,6 +3,143 @@
 Run log, most recent first. Metric is OOF **ROC AUC** (5-fold `StratifiedKFold(42)`) unless
 noted. Log null results too.
 
+## Round 2 — Step 1: interactions feature group (2026-07-10) — NULL RESULT
+
+Evaluated the previously-untested `interactions` group (`Thallium x Chest pain type`,
+`ST depression x Slope of ST`) end-to-end on the two cheap models:
+
+| model | features | OOF AUC | vs base |
+|---|---|---|---|
+| LightGBM | base | 0.95524 | — |
+| LightGBM | base+interactions | 0.95517 | -0.00007 |
+| XGBoost | base | 0.95529 | — |
+| XGBoost | base+interactions | 0.95526 | -0.00003 |
+
+**Verdict: no lift, within noise floor (both actually slightly negative).** Skipped running on
+CatBoost per the gating rule (neither cheap model cleared +0.0005). `interactions` is dropped —
+all subsequent Round 2 steps use `base` features only. Consistent with the EDA/CLAUDE.md read
+that axis-aligned GBDT splits already capture most of what's in these interaction terms
+indirectly (Thallium and Chest pain type are both already top-ranked solo features).
+
+## Round 2 — Step 4: original-data augmentation (2026-07-10) — NULL RESULT
+
+Added the 270-row UCI Statlog Heart source dataset (`ritwikb3/heart-disease-statlog`) to each
+fold's *training* slice only (never validation, to avoid leakage — the synthetic PS data was
+almost certainly generated from this source). Required remapping the Kaggle mirror's 0-indexed
+Cleveland-style codes onto this competition's Statlog-style encoding (`src/data.py::
+load_original`): `cp`+1 -> `Chest pain type`, `slope`+1 -> `Slope of ST`, `thal` {1,2,3} ->
+`Thallium` {3,6,7} rank-preserving, `target`==1 -> `Presence` (confirmed by matching
+target-correlation signs against `data/raw/train.csv`: cp/oldpeak/ca positive, thalach
+negative — same signs as the competition's Chest pain type/ST depression/Number of vessels
+fluro/Max HR). Remapped positive rate 44.4% (120/270) closely matches the competition's 44.8%,
+corroborating the mapping.
+
+| model | OOF AUC | vs base |
+|---|---|---|
+| LightGBM (no augment) | 0.95524 | — |
+| LightGBM + augment | 0.95523 | -0.00001 |
+| XGBoost (no augment) | 0.95529 | — |
+| XGBoost + augment | 0.95529 | +0.00000 |
+
+**Verdict: exactly flat, no effect either direction.** Confirms the `EDA_FINDINGS.md` caveat —
+270 extra rows are statistically invisible against 630k already-clean synthetic rows. Dropped;
+not carried into CatBoost tuning, seed-averaging, or the pytabkit step.
+
+## Round 2 — Step 2: CatBoost tuning (2026-07-10, remote GPU) — NULL RESULT
+
+CatBoost hit the 3000-tree cap on 2/5 folds in the baseline sweep; tried more trees + lower LR
+(`--device cuda` on the RTX 3090 Ti box):
+
+| config | trees | lr | early_stop | OOF AUC | vs baseline | best_iter range |
+|---|---|---|---|---|---|---|
+| baseline | 3000 | 0.03 | 100 | 0.95547 | — | ~2000-2900 (hit cap on 2/5 folds) |
+| cat_tune1 | 6000 | 0.02 | 200 | 0.95538 | -0.00009 | 3250-3560 (no cap hit) |
+| cat_tune2 | 8000 | 0.015 | 250 | 0.95539 | -0.00008 | 4581-5526 (no cap hit) |
+
+**Verdict: tree-cap resolved (no fold hits the new caps) but OOF AUC does not improve —
+both tuned configs are within noise of baseline (slightly below, not above).** No winner
+emerged, so skipped the planned l2_leaf_reg follow-up and the optional depth sweep. CatBoost's
+original lr=0.03/3000-tree config remains the best CatBoost setting found; not carried forward
+as an "improvement," though `cat_tune1`'s artifacts remain available for blending if useful.
+
+## Round 2 — Step 3: seed-averaging / bagging (2026-07-10) — marginal, below the gate
+
+Ran each model 5x under different seeds (CV split + model `random_state` both vary via the new
+`--seed` flag) on the winning (unchanged) base config from Steps 1/2/4, then equal-weight
+blended the 5 OOF/test vectors per model via `src/blend.py`. lgbm/xgb ran locally; cat ran on
+the GPU box (`--device cuda`) for speed.
+
+| model | single-seed OOF range | bagged (5-seed) OOF | vs best single seed |
+|---|---|---|---|
+| LightGBM | 0.95524 – 0.95528 | 0.95535 | +0.00007 |
+| XGBoost | 0.95529 – 0.95533 | 0.95540 | +0.00007 |
+| CatBoost (GPU) | 0.95537 – 0.95541 | 0.95543 | +0.00002 |
+
+lgbm/xgb bagged OOF sits *above* the entire single-seed range for each — a real, if small,
+variance-reduction signal, consistent with what bagging is meant to do. Note a confound on the
+CatBoost row: these 5 seeds ran with `--device cuda` for speed, and even the matching seed=42
+run scored 0.95537 on GPU vs 0.95547 for the original CPU baseline — CatBoost's GPU path skips
+AUC-native early-stopping (falls back to checking every 5 iterations, logged as "AUC is/are not
+implemented for GPU"), which plausibly costs a hair of precision. So the cat_bag5 OOF (0.95543)
+isn't directly comparable to the 0.95547 CPU baseline; within its own GPU-seed family it shows
+the same small positive bagging effect as lgbm/xgb.
+
+**Verdict: all three deltas (+0.00007, +0.00007, +0.00002) are well under the ±0.0005 gate —
+not "genuine improvements" by this project's standard, but directionally consistent and free
+(no new modeling risk).** Worth keeping the bagged artifacts as blend inputs for Step 5's final
+ensemble decision, but not grounds for a standalone resubmission.
+
+## Round 2 — Step 5: pytabkit cross-family diversity (2026-07-11) — NULL RESULT
+
+New `src/train_tabkit.py` wraps `pytabkit`'s `TabM_D_Classifier`/`FTT_D_Classifier` (sklearn-
+style `.fit(X, y, X_val, y_val, cat_col_names=...)`) in `train.py`'s exact OOF/test/metrics
+artifact contract, so `blend.py` works unchanged. Ran on the GPU box (`--device cuda`).
+
+**TabM**: mechanical smoke test (50k rows, 2 folds) passed first, then full 5-fold/630k run:
+
+| model | OOF AUC | fold mean +/- std | wall time |
+|---|---|---|---|
+| TabM (base features) | 0.95358 | 0.95359 +/- 0.00036 | 953s |
+
+Solo TabM sits ~0.0019 below the GBDTs (cat 0.95547 best) but has the tightest fold std of any
+model tried this round -- a genuinely different failure/success pattern, as intended.
+
+**FTT**: blocked by a system-level issue, not a modeling one. `val_metric_name="1-auc_ovr"`
+(used for TabM) isn't implemented in FTT's skorch backend (only `class_error`/`cross_entropy`
+are; confirmed in `pytabkit/models/nn_models/rtdl_resnet.py`) -- switched to `cross_entropy`.
+With that fixed, FTT then failed at the first backward pass: its Triton kernel
+(`bmm_outer_product`) needs to JIT-compile via a C compiler, and the GPU box has none installed
+(`which gcc cc clang` all empty on Ubuntu 24.04). Fixing this means installing
+`build-essential` on the box, a system-level change outside this project's scope -- skipped
+rather than doing that without asking. `src/train_tabkit.py --variant ftt` is left in place for
+if/when a compiler is available.
+
+**Blending TabM with the GBDTs:**
+
+| blend | models | OOF AUC | vs best base (cat 0.95547) |
+|---|---|---|---|
+| blend_tabm | lgbm+xgb+cat+tabm | 0.95523 | -0.00024 |
+| blend_cat_tabm | cat+tabm | 0.95489 | -0.00058 |
+
+**Verdict: no lift from either blend -- TabM's OOF is too far below the GBDTs (~0.0019 gap) for
+equal-weight blending to help**, regardless of how genuinely decorrelated its errors might be;
+diluting the average with a meaningfully weaker model just pulls the blend down. Per this
+project's standing convention (equal-weight diverse blends, not OOF-optimized weighting -- see
+CLAUDE.md), no custom weighting scheme was tried to force a win. The cross-family diversity
+lever does not clear the gate as implemented; would need TabM (or another NN family) to close
+most of the gap to the GBDTs on its own before blending could plausibly help.
+
+## Round 2 summary (2026-07-11)
+
+None of the five explored levers (interactions, original-data augmentation, CatBoost tuning,
+seed-averaging, pytabkit cross-family blend) clear the +-0.0005 OOF-AUC noise gate. Seed-
+averaging (Step 3) is the only one with a consistent, if small, positive signal (+0.00007 for
+both lgbm and xgb) and no downside -- solo CatBoost (0.95547, the original Submission 1 config)
+remains the best result found. **No resubmission is warranted from this round**; the existing
+public LB 0.95358 / private LB 0.95513 submission stands. This is consistent with the EDA read
+going into Round 2: GBDTs on this high-signal, clean, drift-free dataset were already close to
+their ceiling before this round started.
+
 ## Baseline GBDTs (raw 13 features, full 630k train)
 
 | model | OOF AUC | fold mean +/- std | best_iter (typical) | wall time |

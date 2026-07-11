@@ -29,42 +29,45 @@ ART = Path(__file__).resolve().parent.parent / "experiments" / "artifacts"
 
 
 def build_estimator(model: str, device: str = "cpu", seed: int = 42,
-                    depth: int | None = None, trees: int | None = None):
+                    depth: int | None = None, trees: int | None = None,
+                    lr: float | None = None, l2: float | None = None,
+                    early_stop: int | None = None):
     if model == "lgbm":
         import lightgbm as lgb
         return lgb.LGBMClassifier(
-            n_estimators=trees or 3000, learning_rate=0.03, num_leaves=2 ** (depth or 6) - 1,
+            n_estimators=trees or 3000, learning_rate=lr or 0.03, num_leaves=2 ** (depth or 6) - 1,
             subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
-            reg_lambda=1.0, min_child_samples=100, n_jobs=-1, random_state=seed,
+            reg_lambda=l2 or 1.0, min_child_samples=100, n_jobs=-1, random_state=seed,
             objective="binary", metric="auc", verbose=-1,
         )
     if model == "xgb":
         import xgboost as xgb
         return xgb.XGBClassifier(
-            n_estimators=trees or 3000, learning_rate=0.03, max_depth=depth or 6,
-            subsample=0.8, colsample_bytree=0.8, reg_lambda=1.0, min_child_weight=5,
+            n_estimators=trees or 3000, learning_rate=lr or 0.03, max_depth=depth or 6,
+            subsample=0.8, colsample_bytree=0.8, reg_lambda=l2 or 1.0, min_child_weight=5,
             tree_method="hist", device=device, enable_categorical=True,
             objective="binary:logistic", eval_metric="auc",
-            early_stopping_rounds=100, n_jobs=-1, random_state=seed,
+            early_stopping_rounds=early_stop or 100, n_jobs=-1, random_state=seed,
         )
     if model == "cat":
         from catboost import CatBoostClassifier
         return CatBoostClassifier(
-            iterations=trees or 3000, learning_rate=0.03, depth=depth or 6, l2_leaf_reg=3.0,
-            loss_function="Logloss", eval_metric="AUC", early_stopping_rounds=100,
+            iterations=trees or 3000, learning_rate=lr or 0.03, depth=depth or 6,
+            l2_leaf_reg=l2 or 3.0,
+            loss_function="Logloss", eval_metric="AUC", early_stopping_rounds=early_stop or 100,
             random_seed=seed, task_type="GPU" if device == "cuda" else "CPU",
             thread_count=-1, verbose=False,
         )
     raise ValueError(f"unknown model {model}")
 
 
-def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
+def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats, early_stop: int | None = None):
     """Fit with per-library early stopping; return (oof_va_proba, test_proba_or_None, best_iter)."""
     if model == "lgbm":
         import lightgbm as lgb
         est.fit(Xtr, ytr, eval_set=[(Xva, yva)],
                 categorical_feature=cats,
-                callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)])
+                callbacks=[lgb.early_stopping(early_stop or 100, verbose=False), lgb.log_evaluation(0)])
         bi = est.best_iteration_
     elif model == "xgb":
         est.fit(Xtr, ytr, eval_set=[(Xva, yva)], verbose=False)
@@ -90,7 +93,9 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            groups=("base",), tag: str = "", device: str = "cpu",
-           depth: int | None = None, trees: int | None = None) -> dict:
+           depth: int | None = None, trees: int | None = None,
+           augment: bool = False, lr: float | None = None, l2: float | None = None,
+           early_stop: int | None = None, seed: int = 42) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
     if sample:
@@ -119,13 +124,30 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     X = df[feats]
     y = D.encode_target(df).to_numpy()
 
+    # Original UCI source rows (training-only augmentation): added to each fold's training
+    # slice but never the validation slice, so OOF stays scored on synthetic rows only and
+    # stays comparable to non-augmented runs. Categoricals are aligned against the *combined*
+    # train+test level set computed above so category codes still match at predict time.
+    aug_X = aug_y = None
+    if augment:
+        aug_df = add_features(D.load_original(), groups)
+        for c in cats:
+            aug_df[c] = aug_df[c].astype("object").astype(df[c].dtype)
+        aug_X = aug_df[feats]
+        aug_y = D.encode_target(aug_df).to_numpy()
+
     oof = np.zeros(len(df))
     fold_scores = []
     t0 = time.time()
-    for k, (tr, va) in enumerate(folds(y, n_splits)):
-        est = build_estimator(model, device=device, depth=depth, trees=trees)
+    for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
+        Xtr, ytr = X.iloc[tr], y[tr]
+        if augment:
+            Xtr = pd.concat([Xtr, aug_X], ignore_index=True)
+            ytr = np.concatenate([ytr, aug_y])
+        est = build_estimator(model, device=device, seed=seed, depth=depth, trees=trees,
+                               lr=lr, l2=l2, early_stop=early_stop)
         va_pred, te_pred, bi = _fit_predict(
-            model, est, X.iloc[tr], y[tr], X.iloc[va], y[va], Xte, cats)
+            model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats, early_stop=early_stop)
         oof[va] = va_pred
         if Xte is not None:
             test_pred += te_pred / n_splits
@@ -166,6 +188,13 @@ if __name__ == "__main__":
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="xgb/cat compute device")
     p.add_argument("--depth", type=int, default=None, help="tree depth override")
     p.add_argument("--trees", type=int, default=None, help="n_estimators override")
+    p.add_argument("--augment", action="store_true",
+                    help="add the 270-row original UCI dataset to each fold's training slice")
+    p.add_argument("--lr", type=float, default=None, help="learning rate override")
+    p.add_argument("--l2", type=float, default=None, help="l2 regularization override (reg_lambda/l2_leaf_reg)")
+    p.add_argument("--early-stop", type=int, default=None, help="early stopping rounds override")
+    p.add_argument("--seed", type=int, default=42, help="CV split + model seed (for seed-averaging)")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag,
-           device=a.device, depth=a.depth, trees=a.trees)
+           device=a.device, depth=a.depth, trees=a.trees, augment=a.augment,
+           lr=a.lr, l2=a.l2, early_stop=a.early_stop, seed=a.seed)
