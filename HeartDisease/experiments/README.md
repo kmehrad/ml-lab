@@ -45,6 +45,23 @@ corroborating the mapping.
 270 extra rows are statistically invisible against 630k already-clean synthetic rows. Dropped;
 not carried into CatBoost tuning, seed-averaging, or the pytabkit step.
 
+## Round 2 — Step 2: CatBoost tuning (2026-07-10, remote GPU) — NULL RESULT
+
+CatBoost hit the 3000-tree cap on 2/5 folds in the baseline sweep; tried more trees + lower LR
+(`--device cuda` on the RTX 3090 Ti box):
+
+| config | trees | lr | early_stop | OOF AUC | vs baseline | best_iter range |
+|---|---|---|---|---|---|---|
+| baseline | 3000 | 0.03 | 100 | 0.95547 | — | ~2000-2900 (hit cap on 2/5 folds) |
+| cat_tune1 | 6000 | 0.02 | 200 | 0.95538 | -0.00009 | 3250-3560 (no cap hit) |
+| cat_tune2 | 8000 | 0.015 | 250 | 0.95539 | -0.00008 | 4581-5526 (no cap hit) |
+
+**Verdict: tree-cap resolved (no fold hits the new caps) but OOF AUC does not improve —
+both tuned configs are within noise of baseline (slightly below, not above).** No winner
+emerged, so skipped the planned l2_leaf_reg follow-up and the optional depth sweep. CatBoost's
+original lr=0.03/3000-tree config remains the best CatBoost setting found; not carried forward
+as an "improvement," though `cat_tune1`'s artifacts remain available for blending if useful.
+
 ## Baseline GBDTs (raw 13 features, full 630k train)
 
 | model | OOF AUC | fold mean +/- std | best_iter (typical) | wall time |
