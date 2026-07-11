@@ -62,6 +62,33 @@ emerged, so skipped the planned l2_leaf_reg follow-up and the optional depth swe
 original lr=0.03/3000-tree config remains the best CatBoost setting found; not carried forward
 as an "improvement," though `cat_tune1`'s artifacts remain available for blending if useful.
 
+## Round 2 — Step 3: seed-averaging / bagging (2026-07-10) — marginal, below the gate
+
+Ran each model 5x under different seeds (CV split + model `random_state` both vary via the new
+`--seed` flag) on the winning (unchanged) base config from Steps 1/2/4, then equal-weight
+blended the 5 OOF/test vectors per model via `src/blend.py`. lgbm/xgb ran locally; cat ran on
+the GPU box (`--device cuda`) for speed.
+
+| model | single-seed OOF range | bagged (5-seed) OOF | vs best single seed |
+|---|---|---|---|
+| LightGBM | 0.95524 – 0.95528 | 0.95535 | +0.00007 |
+| XGBoost | 0.95529 – 0.95533 | 0.95540 | +0.00007 |
+| CatBoost (GPU) | 0.95537 – 0.95541 | 0.95543 | +0.00002 |
+
+lgbm/xgb bagged OOF sits *above* the entire single-seed range for each — a real, if small,
+variance-reduction signal, consistent with what bagging is meant to do. Note a confound on the
+CatBoost row: these 5 seeds ran with `--device cuda` for speed, and even the matching seed=42
+run scored 0.95537 on GPU vs 0.95547 for the original CPU baseline — CatBoost's GPU path skips
+AUC-native early-stopping (falls back to checking every 5 iterations, logged as "AUC is/are not
+implemented for GPU"), which plausibly costs a hair of precision. So the cat_bag5 OOF (0.95543)
+isn't directly comparable to the 0.95547 CPU baseline; within its own GPU-seed family it shows
+the same small positive bagging effect as lgbm/xgb.
+
+**Verdict: all three deltas (+0.00007, +0.00007, +0.00002) are well under the ±0.0005 gate —
+not "genuine improvements" by this project's standard, but directionally consistent and free
+(no new modeling risk).** Worth keeping the bagged artifacts as blend inputs for Step 5's final
+ensemble decision, but not grounds for a standalone resubmission.
+
 ## Baseline GBDTs (raw 13 features, full 630k train)
 
 | model | OOF AUC | fold mean +/- std | best_iter (typical) | wall time |
