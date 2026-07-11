@@ -21,6 +21,30 @@ all subsequent Round 2 steps use `base` features only. Consistent with the EDA/C
 that axis-aligned GBDT splits already capture most of what's in these interaction terms
 indirectly (Thallium and Chest pain type are both already top-ranked solo features).
 
+## Round 2 — Step 4: original-data augmentation (2026-07-10) — NULL RESULT
+
+Added the 270-row UCI Statlog Heart source dataset (`ritwikb3/heart-disease-statlog`) to each
+fold's *training* slice only (never validation, to avoid leakage — the synthetic PS data was
+almost certainly generated from this source). Required remapping the Kaggle mirror's 0-indexed
+Cleveland-style codes onto this competition's Statlog-style encoding (`src/data.py::
+load_original`): `cp`+1 -> `Chest pain type`, `slope`+1 -> `Slope of ST`, `thal` {1,2,3} ->
+`Thallium` {3,6,7} rank-preserving, `target`==1 -> `Presence` (confirmed by matching
+target-correlation signs against `data/raw/train.csv`: cp/oldpeak/ca positive, thalach
+negative — same signs as the competition's Chest pain type/ST depression/Number of vessels
+fluro/Max HR). Remapped positive rate 44.4% (120/270) closely matches the competition's 44.8%,
+corroborating the mapping.
+
+| model | OOF AUC | vs base |
+|---|---|---|
+| LightGBM (no augment) | 0.95524 | — |
+| LightGBM + augment | 0.95523 | -0.00001 |
+| XGBoost (no augment) | 0.95529 | — |
+| XGBoost + augment | 0.95529 | +0.00000 |
+
+**Verdict: exactly flat, no effect either direction.** Confirms the `EDA_FINDINGS.md` caveat —
+270 extra rows are statistically invisible against 630k already-clean synthetic rows. Dropped;
+not carried into CatBoost tuning, seed-averaging, or the pytabkit step.
+
 ## Baseline GBDTs (raw 13 features, full 630k train)
 
 | model | OOF AUC | fold mean +/- std | best_iter (typical) | wall time |

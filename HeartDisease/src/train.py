@@ -90,7 +90,8 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            groups=("base",), tag: str = "", device: str = "cpu",
-           depth: int | None = None, trees: int | None = None) -> dict:
+           depth: int | None = None, trees: int | None = None,
+           augment: bool = False) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
     if sample:
@@ -119,13 +120,29 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     X = df[feats]
     y = D.encode_target(df).to_numpy()
 
+    # Original UCI source rows (training-only augmentation): added to each fold's training
+    # slice but never the validation slice, so OOF stays scored on synthetic rows only and
+    # stays comparable to non-augmented runs. Categoricals are aligned against the *combined*
+    # train+test level set computed above so category codes still match at predict time.
+    aug_X = aug_y = None
+    if augment:
+        aug_df = add_features(D.load_original(), groups)
+        for c in cats:
+            aug_df[c] = aug_df[c].astype("object").astype(df[c].dtype)
+        aug_X = aug_df[feats]
+        aug_y = D.encode_target(aug_df).to_numpy()
+
     oof = np.zeros(len(df))
     fold_scores = []
     t0 = time.time()
     for k, (tr, va) in enumerate(folds(y, n_splits)):
+        Xtr, ytr = X.iloc[tr], y[tr]
+        if augment:
+            Xtr = pd.concat([Xtr, aug_X], ignore_index=True)
+            ytr = np.concatenate([ytr, aug_y])
         est = build_estimator(model, device=device, depth=depth, trees=trees)
         va_pred, te_pred, bi = _fit_predict(
-            model, est, X.iloc[tr], y[tr], X.iloc[va], y[va], Xte, cats)
+            model, est, Xtr, ytr, X.iloc[va], y[va], Xte, cats)
         oof[va] = va_pred
         if Xte is not None:
             test_pred += te_pred / n_splits
@@ -166,6 +183,8 @@ if __name__ == "__main__":
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="xgb/cat compute device")
     p.add_argument("--depth", type=int, default=None, help="tree depth override")
     p.add_argument("--trees", type=int, default=None, help="n_estimators override")
+    p.add_argument("--augment", action="store_true",
+                    help="add the 270-row original UCI dataset to each fold's training slice")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag,
-           device=a.device, depth=a.depth, trees=a.trees)
+           device=a.device, depth=a.depth, trees=a.trees, augment=a.augment)
