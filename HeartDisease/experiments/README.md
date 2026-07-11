@@ -89,6 +89,57 @@ not "genuine improvements" by this project's standard, but directionally consist
 (no new modeling risk).** Worth keeping the bagged artifacts as blend inputs for Step 5's final
 ensemble decision, but not grounds for a standalone resubmission.
 
+## Round 2 — Step 5: pytabkit cross-family diversity (2026-07-11) — NULL RESULT
+
+New `src/train_tabkit.py` wraps `pytabkit`'s `TabM_D_Classifier`/`FTT_D_Classifier` (sklearn-
+style `.fit(X, y, X_val, y_val, cat_col_names=...)`) in `train.py`'s exact OOF/test/metrics
+artifact contract, so `blend.py` works unchanged. Ran on the GPU box (`--device cuda`).
+
+**TabM**: mechanical smoke test (50k rows, 2 folds) passed first, then full 5-fold/630k run:
+
+| model | OOF AUC | fold mean +/- std | wall time |
+|---|---|---|---|
+| TabM (base features) | 0.95358 | 0.95359 +/- 0.00036 | 953s |
+
+Solo TabM sits ~0.0019 below the GBDTs (cat 0.95547 best) but has the tightest fold std of any
+model tried this round -- a genuinely different failure/success pattern, as intended.
+
+**FTT**: blocked by a system-level issue, not a modeling one. `val_metric_name="1-auc_ovr"`
+(used for TabM) isn't implemented in FTT's skorch backend (only `class_error`/`cross_entropy`
+are; confirmed in `pytabkit/models/nn_models/rtdl_resnet.py`) -- switched to `cross_entropy`.
+With that fixed, FTT then failed at the first backward pass: its Triton kernel
+(`bmm_outer_product`) needs to JIT-compile via a C compiler, and the GPU box has none installed
+(`which gcc cc clang` all empty on Ubuntu 24.04). Fixing this means installing
+`build-essential` on the box, a system-level change outside this project's scope -- skipped
+rather than doing that without asking. `src/train_tabkit.py --variant ftt` is left in place for
+if/when a compiler is available.
+
+**Blending TabM with the GBDTs:**
+
+| blend | models | OOF AUC | vs best base (cat 0.95547) |
+|---|---|---|---|
+| blend_tabm | lgbm+xgb+cat+tabm | 0.95523 | -0.00024 |
+| blend_cat_tabm | cat+tabm | 0.95489 | -0.00058 |
+
+**Verdict: no lift from either blend -- TabM's OOF is too far below the GBDTs (~0.0019 gap) for
+equal-weight blending to help**, regardless of how genuinely decorrelated its errors might be;
+diluting the average with a meaningfully weaker model just pulls the blend down. Per this
+project's standing convention (equal-weight diverse blends, not OOF-optimized weighting -- see
+CLAUDE.md), no custom weighting scheme was tried to force a win. The cross-family diversity
+lever does not clear the gate as implemented; would need TabM (or another NN family) to close
+most of the gap to the GBDTs on its own before blending could plausibly help.
+
+## Round 2 summary (2026-07-11)
+
+None of the five explored levers (interactions, original-data augmentation, CatBoost tuning,
+seed-averaging, pytabkit cross-family blend) clear the +-0.0005 OOF-AUC noise gate. Seed-
+averaging (Step 3) is the only one with a consistent, if small, positive signal (+0.00007 for
+both lgbm and xgb) and no downside -- solo CatBoost (0.95547, the original Submission 1 config)
+remains the best result found. **No resubmission is warranted from this round**; the existing
+public LB 0.95358 / private LB 0.95513 submission stands. This is consistent with the EDA read
+going into Round 2: GBDTs on this high-signal, clean, drift-free dataset were already close to
+their ceiling before this round started.
+
 ## Baseline GBDTs (raw 13 features, full 630k train)
 
 | model | OOF AUC | fold mean +/- std | best_iter (typical) | wall time |
