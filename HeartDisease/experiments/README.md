@@ -3,6 +3,24 @@
 Run log, most recent first. Metric is OOF **ROC AUC** (5-fold `StratifiedKFold(42)`) unless
 noted. Log null results too.
 
+## Round 2 — Step 1: interactions feature group (2026-07-10) — NULL RESULT
+
+Evaluated the previously-untested `interactions` group (`Thallium x Chest pain type`,
+`ST depression x Slope of ST`) end-to-end on the two cheap models:
+
+| model | features | OOF AUC | vs base |
+|---|---|---|---|
+| LightGBM | base | 0.95524 | — |
+| LightGBM | base+interactions | 0.95517 | -0.00007 |
+| XGBoost | base | 0.95529 | — |
+| XGBoost | base+interactions | 0.95526 | -0.00003 |
+
+**Verdict: no lift, within noise floor (both actually slightly negative).** Skipped running on
+CatBoost per the gating rule (neither cheap model cleared +0.0005). `interactions` is dropped —
+all subsequent Round 2 steps use `base` features only. Consistent with the EDA/CLAUDE.md read
+that axis-aligned GBDT splits already capture most of what's in these interaction terms
+indirectly (Thallium and Chest pain type are both already top-ranked solo features).
+
 ## Baseline GBDTs (raw 13 features, full 630k train)
 
 | model | OOF AUC | fold mean +/- std | best_iter (typical) | wall time |
