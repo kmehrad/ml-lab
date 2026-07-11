@@ -21,5 +21,13 @@ dependencies = [
     "xgboost>=2.1.0",
 ]
 
+[project.optional-dependencies]
+# Installed only in the remote GPU box venv (Mac has no CUDA). pytabkit[models] (not the bare
+# package) is required for FTT_D_Classifier, not just TabM.
+gpu = [
+    "torch>=2.2.0",
+    "pytabkit[models]>=1.7.0",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
