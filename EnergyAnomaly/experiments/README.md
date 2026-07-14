@@ -11,6 +11,7 @@ Submit only after CV review + approval.
 | exp-004 | 2026-06-24 | HistGradientBoosting | 0.95331 | — | — | 0.95263 ± 0.01417 | sklearn HGB, `from_dtype` categoricals. Weakest; excluded from final blend (drags it down). |
 | exp-005 | 2026-06-24 | CatBoost | 0.95809 | — | — | 0.95820 ± 0.00825 | depth 8, AUC eval, early stop. Adds diversity to the blend. |
 | exp-006 | 2026-06-24 | Blend lgbm+xgb+cat | **0.96342** | 0.95896 | 0.96934 | — | Best OOF (+0.0025 vs exp-001). Equal-weight rank-average; HistGB excluded (lgbm+xgb+cat+histgb=0.96278). **But LB ~flat: public +0.0003, private −0.0010 vs baseline.** OOF gain did not transfer. |
+| exp-007 | 2026-07-14 | XGBoost (solo) | 0.96202 | 0.95480 | 0.96800 | 0.96154 ± 0.01107 | Best single-model OOF, submitted solo to check transfer. **Worse than both prior submissions on public and private LB**, despite beating lgbm on OOF. Further confirms OOF is not a reliable ranker across these models — lgbm baseline (exp-001) remains the best private-LB result. |
 
 ## Notes
 - High per-fold variance (±0.012) reflects building heterogeneity — expected with grouped CV.
@@ -21,6 +22,8 @@ Submit only after CV review + approval.
 - **CV↔LB caution:** the +0.0025 OOF blend gain did NOT transfer (public +0.0003, private −0.0010).
   The simple LightGBM baseline (exp-001) remains the best private-LB result (0.97031). Treat small
   OOF gains skeptically; building heterogeneity makes ~0.002 differences leaderboard-noise.
+- exp-007 reinforces this: solo XGBoost had the best single-model OOF (0.96202, beating lgbm's
+  0.96091) but scored worst on both public and private LB of all three submissions.
 - Next: weather ablation; stronger/diverse features (series-endpoint flags, longer lags); per-model
   tuning; optional GPU DL track for genuinely uncorrelated diversity.
 
