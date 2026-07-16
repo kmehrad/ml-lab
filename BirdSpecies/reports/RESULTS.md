@@ -17,7 +17,7 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 | **Blend (rf_full+rf+cnn)** | mixed | **0.94099** | — | **0.91598** | Final. Global rank-average. Private 0.90821 (sub 54284029). |
 | RandomForest | full(182) | 0.93732 | 0.9190 | 0.90799 | Best single. +audio. Private 0.89786 (sub 54254895). |
 | RandomForest | base(86) | 0.92981 | 0.9130 | **0.89424** | Baseline. Private 0.88889 (sub 54251123). |
-| RandomForest | ext(154) | 0.92983 | 0.9111 | | Δ/percentiles add nothing over base. |
+| RandomForest | ext(154) | 0.92983 | 0.9111 | 0.89843 | Δ/percentiles ~flat OOF vs base, but beat it on LB. Private 0.89122 (sub 54749853). |
 | LogReg | full(182) | 0.89243 | 0.8814 | | Doesn't benefit from richer features. |
 | LogReg | base(86) | 0.89515 | 0.8778 | | StandardScaler + balanced, C=1. |
 | LightGBM | base(86) | 0.88545 | 0.8781 | | 300 trees; overfits few positives. |
@@ -66,6 +66,7 @@ Feature levels: **base** = MFCC moments (86) · **ext** = + Δ-MFCC & percentile
 |-----|-------|----:|----------:|-----------:|
 | 54284029 | **Blend rf_full+rf+cnn** | 0.94099 | **0.91598** | **0.90821** |
 | 54254895 | RF full(182) | 0.93732 | 0.90799 | 0.89786 |
+| 54749853 | RF ext(154) | 0.92983 | 0.89843 | 0.89122 |
 | 54251123 | RF base(86) | 0.92981 | 0.89424 | 0.88889 |
 
 Steady climb at every stage — base → +audio features → +CNN blend:
