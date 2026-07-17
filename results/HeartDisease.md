@@ -15,15 +15,19 @@ hashes in the source note.
 | XGBoost | 0.95529 | — | — | Base learner. |
 | LightGBM | 0.95524 | — | — | Base learner. |
 | TabM (pytabkit) | 0.95358 | — | — | Round-2 cross-family NN; ~0.0019 below the GBDTs — too weak to lift an equal-weight blend. |
+| CatBoost 5-seed bag | 0.95543 | 0.95348 | 0.95504 | Submission 4. Best non-submitted model by OOF as of Submission 3; still a hair below Submission 1 on OOF, LB, and private LB alike. |
 | XGBoost + CatBoost blend | 0.95544 | 0.95353 | 0.95510 | Submission 3. Ties Submission 1 within fold noise on both OOF and LB (both a hair below). |
+| LightGBM + CatBoost blend | 0.95542 | — | — | Never submitted; within noise of solo CatBoost. |
 | LightGBM + XGBoost + CatBoost blend | 0.95541 | — | — | Best 3-GBDT blend; never submitted (no OOF edge over solo CatBoost). |
 | LightGBM + XGBoost + CatBoost + TabM blend | 0.95523 | 0.95330 | 0.95487 | Submission 2. Diluting with TabM hurt OOF and LB in the same direction. |
 
-Round-2 also tried EDA interaction features, original-data augmentation, CatBoost
-tuning, and 5-seed bagging — all landed within the ±0.0004–0.0005 fold-noise floor (seed-
-bagging's +0.00002–0.00007 was the only consistently-positive one, still sub-gate) and none are
-reflected above since nothing changed the headline numbers or got submitted.
+Round-2 also tried EDA interaction features, original-data augmentation, and CatBoost
+tuning — all landed within the ±0.0004–0.0005 fold-noise floor and none are reflected above
+since nothing changed the headline numbers or got submitted. Four submissions now span a tight
+0.0001 public / 0.0001 private band, all a hair below solo CatBoost — consistent with Round 2's
+read that GBDTs were already near their ceiling on this dataset before the round started.
 
-_Last refreshed 2026-07-15. Sources: `experiments/artifacts/*_metrics.json` (OOF numbers);
-commits `2dd3e1ad9` (Submission 1), `23396a515` (Submissions 2 & 3, on
-`experiment/heart-disease-round2`)._
+_Last refreshed 2026-07-17. Sources: `experiments/artifacts/*_metrics.json` (OOF numbers);
+commits `2dd3e1ad9` (Submission 1), `23396a515` (Submissions 2 & 3), `6e8cde4` (Submission 4) —
+all three round-2 submission commits live on `experiment/heart-disease-round2`, not yet merged
+to `main`._
