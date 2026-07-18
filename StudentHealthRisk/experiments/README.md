@@ -16,6 +16,9 @@ above-fold-noise gains.
 | 006 | 2026-07-05 | blend lgbm+xgb+cat+nn (proba avg) | base | 0.94976 | 0.94944 | — | — | +0.00004 vs best base — noise. |
 | 007 | 2026-07-05 | blend lgbm+xgb+cat (GBDT only) | base | **0.94979** | 0.94914 | — | **0.94953** | SUBMITTED. CV↔LB gap −0.00026 (within noise) — CV tracks LB. |
 | 008 | 2026-07-05 | hillclimb (all 4) | base | 0.94986 | — | — | — | picks xgb+cat 50/50; +0.00014 vs best single — still sub-noise. |
+| 009 | 2026-07-06 | blend xgb+lgbm @800 trees (metric-aligned) | base | 0.94998 | — | — | **0.94938** | SUBMITTED, REGRESSED below exp-007 (0.94953) despite highest-yet OOF. Confirms OOF↔LB coupling is at the ±0.0002 noise floor for single-GBDT-family moves. |
+| 010 | 2026-07-07 | hillclimb xgb+tabm+ftt (⅓ each) — cross-family | base + pytabkit TabM/FTT | **0.94994** | — | — | **0.94981** | SUBMITTED, new best. TabM/FTT are near-GBDT-strength *and* decorrelated (each fixes ~4-5% of xgb errors) — genuine cross-family diversity, not single-family noise. Gap −0.00013, transferred. **Best submission.** |
+| 011 | 2026-07-13 | hillclimb xgb+tabm+cat (⅓ each) — swap ftt→cat | base + pytabkit TabM | 0.94993 | — | — | 0.94964 | SUBMITTED. OOF ties exp-010 (Δ 0.00001) but LB is 0.00017 *below* it — swapping FTT for CatBoost loses the diversity that made exp-010 work, even though OOF couldn't tell the two picks apart. Still beats exp-007/009, so cross-family (GBDT+NN) blends as a class outperform single-family blends; the *specific* pick (which NN, which GBDT) matters and isn't resolved by OOF alone at this noise floor. |
 
 ## Verdicts / narrative
 
@@ -36,3 +39,18 @@ above-fold-noise gains.
   EDA). **Conclusion: the ~0.9497 plateau is the ceiling for this feature set;** further single-model
   tuning (more trees) is the only remaining lever and unlikely to move the plateau. Candidate submission
   = equal-weight 3-GBDT blend (0.94979) — generalizes better than the OOF-overfit hillclimb pick.
+- **exp-009 tree-count "win" was noise.** Metric-aligned early stopping (~800 trees beats the log-loss
+  optimum) lifted OOF to 0.94998 (highest yet) but LB **regressed** to 0.94938 — worse than exp-007.
+  Confirms single-GBDT-family OOF deltas under ~0.0005 are not trustworthy signal here.
+- **exp-010 breakthrough: cross-family diversity.** Generalizing the NN learner to a pytabkit arch zoo
+  found TabM and FTT are near-GBDT-strength *and* genuinely decorrelated (unlike the earlier weak plain
+  RealMLP). Hillclimb xgb+tabm+ftt reached OOF 0.94994 → **LB 0.94981**, the first improvement that
+  actually transferred (gap only −0.00013). This is the current best submission.
+- **exp-011 pick sensitivity.** Swapping CatBoost in for FTT (xgb+tabm+cat) ties exp-010 on OOF (within
+  0.00001) but lands at LB 0.94964 — 0.00017 *worse*. So it's not "any 3-model cross-family hillclimb
+  ties the best": the specific FTT pick matters, and OOF at this saturation level can't distinguish which
+  pick will generalize. Both cross-family blends still beat every single-GBDT-family blend (exp-007/009),
+  so **the actionable hint is: cross-family diversity (GBDT + independently-trained NN architectures) is
+  the real lever left; the next experiments should add more/different diverse members (e.g. TabR once its
+  "0 features" bug is fixed, a second NN seed/arch, deeper stacking) rather than re-tuning single models
+  or re-picking among the same 5 base learners.**
