@@ -1,0 +1,17 @@
+data/raw/*
+data/processed/*
+!**/.gitkeep
+models/*
+!models/.gitkeep
+outputs/*
+!outputs/.gitkeep
+experiments/artifacts/*
+!experiments/artifacts/.gitkeep
+reports/figures/*
+!reports/figures/.gitkeep
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+kaggle.json
+access_token
