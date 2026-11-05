@@ -28,11 +28,11 @@ ART = Path(__file__).resolve().parent.parent / "experiments" / "artifacts"
 
 
 def build_estimator(model: str, device: str = "cpu", seed: int = 42,
-                    depth: int | None = None, trees: int | None = None):
+                    depth: int | None = None, trees: int | None = None, lr: float | None = None):
     if model == "lgbm":
         import lightgbm as lgb
         return lgb.LGBMRegressor(
-            n_estimators=trees or 3000, learning_rate=0.03, num_leaves=2 ** (depth or 6) - 1,
+            n_estimators=trees or 3000, learning_rate=lr or 0.03, num_leaves=2 ** (depth or 6) - 1,
             subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
             reg_lambda=1.0, min_child_samples=100, n_jobs=-1, random_state=seed,
             objective="regression", metric="rmse", verbose=-1,
@@ -40,7 +40,7 @@ def build_estimator(model: str, device: str = "cpu", seed: int = 42,
     if model == "xgb":
         import xgboost as xgb
         return xgb.XGBRegressor(
-            n_estimators=trees or 3000, learning_rate=0.03, max_depth=depth or 6,
+            n_estimators=trees or 3000, learning_rate=lr or 0.03, max_depth=depth or 6,
             subsample=0.8, colsample_bytree=0.8, reg_lambda=1.0, min_child_weight=5,
             tree_method="hist", device=device, enable_categorical=True,
             objective="reg:squarederror", eval_metric="rmse",
@@ -49,7 +49,7 @@ def build_estimator(model: str, device: str = "cpu", seed: int = 42,
     if model == "cat":
         from catboost import CatBoostRegressor
         return CatBoostRegressor(
-            iterations=trees or 3000, learning_rate=0.03, depth=depth or 6, l2_leaf_reg=3.0,
+            iterations=trees or 3000, learning_rate=lr or 0.03, depth=depth or 6, l2_leaf_reg=3.0,
             loss_function="RMSE", eval_metric="RMSE", early_stopping_rounds=100,
             random_seed=seed, task_type="GPU" if device == "cuda" else "CPU",
             thread_count=-1, verbose=False,
@@ -89,7 +89,8 @@ def _fit_predict(model, est, Xtr, ytr, Xva, yva, Xte, cats):
 
 def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
            groups=("base",), tag: str = "", device: str = "cpu",
-           depth: int | None = None, trees: int | None = None) -> dict:
+           depth: int | None = None, trees: int | None = None,
+           lr: float | None = None, seed: int = 42) -> dict:
     groups = tuple(groups)
     df = add_features(D.load_train(), groups)
     if sample:
@@ -121,8 +122,8 @@ def run_cv(model: str, sample: int | None = None, n_splits: int = 5,
     oof = np.zeros(len(df))
     fold_scores = []
     t0 = time.time()
-    for k, (tr, va) in enumerate(folds(y, n_splits)):
-        est = build_estimator(model, device=device, depth=depth, trees=trees)
+    for k, (tr, va) in enumerate(folds(y, n_splits, seed=seed)):
+        est = build_estimator(model, device=device, seed=seed, depth=depth, trees=trees, lr=lr)
         va_pred, te_pred, bi = _fit_predict(
             model, est, X.iloc[tr], y[tr], X.iloc[va], y[va], Xte, cats)
         oof[va] = va_pred
@@ -165,6 +166,8 @@ if __name__ == "__main__":
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="xgb/cat compute device")
     p.add_argument("--depth", type=int, default=None, help="tree depth override")
     p.add_argument("--trees", type=int, default=None, help="n_estimators override")
+    p.add_argument("--lr", type=float, default=None, help="learning rate override")
+    p.add_argument("--seed", type=int, default=42, help="fold-split + model seed (for seed-averaging)")
     a = p.parse_args()
     run_cv(a.model, a.sample, a.folds, groups=a.features, tag=a.tag,
-           device=a.device, depth=a.depth, trees=a.trees)
+           device=a.device, depth=a.depth, trees=a.trees, lr=a.lr, seed=a.seed)
